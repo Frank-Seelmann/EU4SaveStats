@@ -1,0 +1,11 @@
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\rust_sqlite_playground\target\debug\deps\liblitemap-17900d93b8029310.rmeta: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\lib.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\map.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\mod.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\slice_impl.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\vec_impl.rs
+
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\rust_sqlite_playground\target\debug\deps\liblitemap-17900d93b8029310.rlib: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\lib.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\map.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\mod.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\slice_impl.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\vec_impl.rs
+
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\rust_sqlite_playground\target\debug\deps\litemap-17900d93b8029310.d: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\lib.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\map.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\mod.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\slice_impl.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\vec_impl.rs
+
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\lib.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\map.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\mod.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\slice_impl.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\litemap-0.7.5\src\store\vec_impl.rs:
