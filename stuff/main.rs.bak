@@ -1,0 +1,105 @@
+use eu4save::{Eu4File, SegmentedResolver, query::Query, CountryTag, Eu4Date, PdsDate};
+use std::{fs, error::Error};
+use serde::{Serialize, Deserialize};
+use serde_json;
+
+#[derive(Serialize, Deserialize)]
+struct MonthlyData {
+    date: String,
+    income: Vec<f64>,
+    manpower: f64,
+    max_manpower: f64,
+    trade_income: f64,
+}
+
+fn increment_month(date: &mut Eu4Date) -> bool {
+    let year = date.year();
+    let month = date.month();
+
+    if month == 12 {
+        if year < 9999 {
+            *date = Eu4Date::from_ymd(year + 1, 1, 1);
+        } else {
+            return false; // End of campaign
+        }
+    } else {
+        *date = Eu4Date::from_ymd(year, month + 1, 1);
+    }
+
+    println!("Incremented to date: {:?}", date); // Debugging output to check date incrementation
+    true
+}
+
+pub fn run(path: &str) -> Result<(), Box<dyn Error>> {
+    let data = fs::read(path)?;
+
+    // Parse the save file
+    let file = Eu4File::from_slice(&data)?;
+    let resolver = SegmentedResolver::empty();
+    let save = file.parse_save(&resolver)?;
+
+    // Get the player tag from metadata
+    let player_tag = save.meta.player.clone();
+    let country_tag = CountryTag::create(player_tag.as_bytes()).map_err(|_| "Invalid country tag.")?;
+
+    // Create a Query object for extracting data
+    let save_query = Query::from_save(save.clone());
+
+    // Initialize current_date to the start date of the campaign
+    let mut current_date = save.meta.date; // Use the save's start date
+    let end_date = Eu4Date::from_ymd(1821, 1, 1); // Set end date to the end of the campaign
+
+    println!("Start Date: {:?}", current_date); // Debugging output
+    println!("End Date: {:?}", end_date); // Debugging output
+
+    let mut monthly_data = Vec::new();
+
+    // Find the player's country in the save
+    if let Some((_, country)) = save.game.countries.iter().find(|(tag, _)| *tag == country_tag) {
+        loop {
+            // Extract data for the current month
+            let country_query = save_query.country(&country_tag).ok_or("Country not found")?;
+            let income = &country.ledger.income;
+            let manpower = country.manpower;
+            let max_manpower = country.max_manpower;
+            let income_breakdown = save_query.country_income_breakdown(&country_query);
+            let trade_income = income_breakdown.trade;
+
+            // Debugging: Print current data and check if it's changing for each month
+            println!(
+                "Month: {:?}, Income: {:?}, Manpower: {}, Max Manpower: {}, Trade Income: {}",
+                current_date, income, manpower, max_manpower, trade_income
+            );
+
+            monthly_data.push(MonthlyData {
+                date: format!("{:?}", current_date),
+                income: income.iter().map(|&i| i as f64).collect(),
+                manpower: manpower as f64,
+                max_manpower: max_manpower as f64,
+                trade_income: trade_income as f64,
+            });
+
+            // Stop if we reach the end date
+            if current_date >= end_date || !increment_month(&mut current_date) {
+                println!("Loop exited: current_date = {:?}, end_date = {:?}", current_date, end_date); // Debugging output
+                break;
+            }
+        }
+
+        // Write data to JSON
+        let file = fs::File::create("monthly_data.json")?;
+        serde_json::to_writer_pretty(file, &monthly_data)?;
+
+        println!("Data written to 'monthly_data.json'");
+    } else {
+        println!("Error: Player country '{}' not found in save.", player_tag);
+    }
+
+    Ok(())
+}
+
+fn main() {
+    if let Err(e) = run("../mp_Scotland1474_07_04.eu4") {
+        eprintln!("Error: {}", e);
+    }
+}
