@@ -36,7 +36,7 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
 
 #[async_std::main]
 async fn main() {
-    let db_url = "sqlite://sqlite.db";
+    let db_url = "sqlite:///C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db";
 
     if !Sqlite::database_exists(db_url).await.unwrap_or(false) {
         Sqlite::create_database(db_url).await.unwrap();
@@ -56,6 +56,9 @@ async fn main() {
         .bind("testing")
         .execute(&pool)
         .await;
+
+    let insert_qry = "INSERT INTO settings (description) VALUES ('Test Entry 1'), ('Test Entry 2');";
+    sqlx::query(insert_qry).execute(&pool).await.unwrap();
 
     pool.close().await;
     println!("{:?}", result);
