@@ -1,1 +1,0 @@
-C:\Users\frank\Desktop\Cloud\ Computing\EU4SaveStats\rust_sqlite_playground\target\debug\rust_sqlite_playground.exe: C:\Users\frank\Desktop\Cloud\ Computing\EU4SaveStats\rust_sqlite_playground\src\main.rs
