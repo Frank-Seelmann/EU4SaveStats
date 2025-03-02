@@ -445,6 +445,7 @@ dependencies = [
  "jomini",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
 ]
 

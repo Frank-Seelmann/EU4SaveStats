@@ -5,8 +5,9 @@ use serde::{Serialize, Deserialize};
 use serde_json;
 use std::collections::BTreeMap;
 use sqlx::{sqlite::SqlitePool, Sqlite, migrate::MigrateDatabase};
+use sha2::{Sha256, Digest};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]  // Add Debug here
 struct CurrentState {
     date: String,
     income: Vec<f64>,
@@ -28,9 +29,20 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         "PRAGMA foreign_keys = ON;"
     ).execute(pool).await?;
 
+    // Table to track uploaded files
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS uploaded_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_name TEXT NOT NULL,
+            file_checksum TEXT NOT NULL UNIQUE,
+            upload_time DATETIME DEFAULT CURRENT_TIMESTAMP
+        );"
+    ).execute(pool).await?;
+
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS current_state (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_checksum TEXT NOT NULL,
             country_tag TEXT NOT NULL,
             date TEXT NOT NULL,
             income TEXT NOT NULL,
@@ -43,6 +55,7 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS historical_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_checksum TEXT NOT NULL,
             country_tag TEXT NOT NULL,
             date TEXT NOT NULL,
             event_type TEXT NOT NULL,
@@ -53,6 +66,7 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS annual_income (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_checksum TEXT NOT NULL,
             country_tag TEXT NOT NULL,
             year TEXT NOT NULL,
             income REAL NOT NULL
@@ -62,16 +76,25 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+/// Calculate the SHA-256 checksum of a file
+fn calculate_checksum(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    format!("{:x}", result)
+}
+
 pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
     let data = fs::read(path)?;
 
-    // Parse the save file
-    let file = Eu4File::from_slice(&data)?;
-    let resolver = SegmentedResolver::empty();
-    let save = file.parse_save(&resolver)?;
-
-    // Get the current date from metadata
-    let current_date = save.meta.date;
+    // Calculate the checksum of the file
+    let file_checksum = calculate_checksum(&data);
+    let file_name = std::path::Path::new(path)
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
 
     // Connect to SQLite database
     let db_url = "sqlite:///C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db";
@@ -88,6 +111,41 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
     let pool = SqlitePool::connect(db_url).await.unwrap();
     create_schema(&pool).await?;
 
+    // Check if the file has already been processed
+    let existing_file = sqlx::query(
+        "SELECT id FROM uploaded_files WHERE file_checksum = ?"
+    )
+    .bind(&file_checksum)
+    .fetch_optional(&pool)
+    .await?;
+
+    if existing_file.is_some() {
+        println!("File '{}' has already been processed. Skipping...", file_name);
+        return Ok(());
+    }
+
+    // Insert the file metadata into the database
+    sqlx::query(
+        "INSERT INTO uploaded_files (file_name, file_checksum) VALUES (?, ?)"
+    )
+    .bind(&file_name)
+    .bind(&file_checksum)
+    .execute(&pool)
+    .await?;
+
+    // Parse the save file
+    let file = Eu4File::from_slice(&data)?;
+    let resolver = SegmentedResolver::empty();
+    let save = file.parse_save(&resolver)?;
+
+    // Debug: Print metadata and player tag
+    println!("Processing file: {}", file_name);
+    println!("Player tag: {}", save.meta.player);
+    println!("Date: {:?}", save.meta.date);
+
+    // Get the current date from metadata
+    let current_date = save.meta.date;
+
     // Create a Query object for extracting data
     let save_query = Query::from_save(save.clone());
 
@@ -98,6 +156,19 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
     // Get player histories to identify all player-controlled countries
     let player_histories = save_query.player_histories(&nation_events);
 
+    // Debug: Print player histories
+    println!("Player histories:");
+    for player_history in &player_histories {
+        println!(
+            "Initial: {}, Latest: {}, Stored: {}, Is Human: {}, Player Names: {:?}",
+            player_history.history.initial,
+            player_history.history.latest,
+            player_history.history.stored,
+            player_history.is_human,
+            player_history.player_names
+        );
+    }
+
     // Iterate over all player-controlled countries
     for player_history in player_histories {
         let country_tag = player_history.history.latest.to_string();
@@ -105,6 +176,12 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
 
         // Find the country in the save
         if let Some((_, country)) = save.game.countries.iter().find(|(tag, _)| tag.to_string() == country_tag) {
+            // Debug: Print country data
+            println!("Country found: {}", country_tag);
+            println!("Income: {:?}", country.ledger.income);
+            println!("Manpower: {}", country.manpower);
+            println!("Max Manpower: {}", country.max_manpower);
+
             // Extract current state data
             let country_query = save_query.country(&country_tag.parse()?).ok_or("Country not found")?;
             let income = &country.ledger.income;
@@ -116,7 +193,7 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
             // Extract historical income data
             let player_nation_events = nation_events
                 .iter()
-                .find(|x| x.initial.to_string() == country_tag)
+                .find(|x| x.initial.to_string() == country_tag || x.latest.to_string() == country_tag)
                 .ok_or("Player nation events not found")?;
 
             let income_statistics = save_query.income_statistics_ledger(player_nation_events);
@@ -139,6 +216,27 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
                 trade_income: trade_income as f64,
                 annual_income,
             };
+
+            // Debug: Print current state data
+            println!("Current state data for {}: {:?}", country_tag, current_state);
+
+            // Insert current state data
+            let income_json = serde_json::to_string(&current_state.income)?;
+            sqlx::query(
+                "INSERT INTO current_state (file_checksum, country_tag, date, income, manpower, max_manpower, trade_income) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            )
+            .bind(&file_checksum)
+            .bind(&country_tag)
+            .bind(&current_state.date)
+            .bind(income_json)
+            .bind(current_state.manpower)
+            .bind(current_state.max_manpower)
+            .bind(current_state.trade_income)
+            .execute(&pool)
+            .await?;
+
+            // Debug: Confirm insertion
+            println!("Data for country {} inserted into database.", country_tag);
 
             // Extract historical events
             let mut historical_events = Vec::new();
@@ -199,25 +297,12 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
                 });
             }
 
-            // Insert current state data
-            let income_json = serde_json::to_string(&current_state.income)?;
-            sqlx::query(
-                "INSERT INTO current_state (country_tag, date, income, manpower, max_manpower, trade_income) VALUES (?, ?, ?, ?, ?, ?)"
-            )
-            .bind(&country_tag)
-            .bind(&current_state.date)
-            .bind(income_json)
-            .bind(current_state.manpower)
-            .bind(current_state.max_manpower)
-            .bind(current_state.trade_income)
-            .execute(&pool)
-            .await?;
-
             // Insert historical events
             for event in historical_events {
                 sqlx::query(
-                    "INSERT INTO historical_events (country_tag, date, event_type, details) VALUES (?, ?, ?, ?)"
+                    "INSERT INTO historical_events (file_checksum, country_tag, date, event_type, details) VALUES (?, ?, ?, ?, ?)"
                 )
+                .bind(&file_checksum)
                 .bind(&country_tag)
                 .bind(event.date)
                 .bind(event.event_type)
@@ -229,8 +314,9 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
             // Insert annual income data
             for (year, income) in current_state.annual_income {
                 sqlx::query(
-                    "INSERT INTO annual_income (country_tag, year, income) VALUES (?, ?, ?)"
+                    "INSERT INTO annual_income (file_checksum, country_tag, year, income) VALUES (?, ?, ?, ?)"
                 )
+                .bind(&file_checksum)
                 .bind(&country_tag)
                 .bind(year)
                 .bind(income)
@@ -244,12 +330,16 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
+    println!("File '{}' processed successfully.", file_name);
     Ok(())
 }
 
 #[async_std::main]
 async fn main() {
     if let Err(e) = run("../stuff/mp_Scotland1474_07_04.eu4").await {
+        eprintln!("Error: {}", e);
+    }
+    if let Err(e) = run("../stuff/mp_Byzantium1527_11_02.eu4").await {
         eprintln!("Error: {}", e);
     }
 }
