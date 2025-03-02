@@ -1,0 +1,7 @@
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\eu4_parser\target\debug\deps\libfutures_io-492dcd5508391aa4.rmeta: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\futures-io-0.3.31\src\lib.rs
+
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\eu4_parser\target\debug\deps\libfutures_io-492dcd5508391aa4.rlib: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\futures-io-0.3.31\src\lib.rs
+
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\eu4_parser\target\debug\deps\futures_io-492dcd5508391aa4.d: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\futures-io-0.3.31\src\lib.rs
+
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\futures-io-0.3.31\src\lib.rs:

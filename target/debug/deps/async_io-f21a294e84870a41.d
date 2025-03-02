@@ -1,0 +1,10 @@
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\eu4_parser\target\debug\deps\libasync_io-f21a294e84870a41.rmeta: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\lib.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\driver.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\reactor.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\os.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\os\windows.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\reactor\windows.rs
+
+C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\eu4_parser\target\debug\deps\async_io-f21a294e84870a41.d: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\lib.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\driver.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\reactor.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\os.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\os\windows.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\reactor\windows.rs
+
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\lib.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\driver.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\reactor.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\os.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\os\windows.rs:
+C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\async-io-2.4.0\src\reactor\windows.rs:
