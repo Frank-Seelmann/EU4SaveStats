@@ -1,54 +1,73 @@
-from flask import Flask, render_template
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for
+import sqlite3
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
+# Database file path
+DATABASE = 'C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db'
 
-class CurrentState(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.String, nullable=False)
-    income = db.Column(db.String, nullable=False)
-    manpower = db.Column(db.Float, nullable=False)
-    max_manpower = db.Column(db.Float, nullable=False)
-    trade_income = db.Column(db.Float, nullable=False)
-
-class HistoricalEvents(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.String, nullable=False)
-    event_type = db.Column(db.String, nullable=False)
-    details = db.Column(db.String, nullable=False)
-
-class AnnualIncome(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    year = db.Column(db.String, nullable=False)
-    income = db.Column(db.Float, nullable=False)
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 @app.route('/')
 def index():
-    # Verify database connection
-    print("Database URI:", app.config['SQLALCHEMY_DATABASE_URI'])
+    conn = get_db_connection()
+    files = conn.execute('SELECT * FROM uploaded_files').fetchall()
+    conn.close()
+    return render_template('index.html', files=files)
 
-    # Query all tables
-    current_state = CurrentState.query.first()
-    historical_events = HistoricalEvents.query.all()
-    annual_income = AnnualIncome.query.order_by(AnnualIncome.year).all()
-
-    # Debug print to verify query results
-    print("Current State from Database:", current_state)
-    print("Historical Events from Database:", historical_events)
-    print("Annual Income from Database:", annual_income)
-
-    return render_template(
-        'index.html',
-        current_state=current_state,
-        historical_events=historical_events,
-        annual_income=annual_income
-    )
+@app.route('/file/<int:file_id>')
+def file_details(file_id):
+    conn = get_db_connection()
+    file_info = conn.execute('SELECT * FROM uploaded_files WHERE id = ?', (file_id,)).fetchone()
+    
+    # Get current state data for all countries in this file
+    current_states = conn.execute('''
+        SELECT country_tag, date, income, manpower, max_manpower, trade_income 
+        FROM current_state 
+        WHERE file_checksum = ?
+    ''', (file_info['file_checksum'],)).fetchall()
+    
+    # Get annual income data for all countries in this file
+    annual_incomes = conn.execute('''
+        SELECT country_tag, year, income 
+        FROM annual_income 
+        WHERE file_checksum = ?
+    ''', (file_info['file_checksum'],)).fetchall()
+    
+    # Get historical events for all countries in this file
+    historical_events = conn.execute('''
+        SELECT country_tag, date, event_type, details 
+        FROM historical_events 
+        WHERE file_checksum = ?
+    ''', (file_info['file_checksum'],)).fetchall()
+    
+    conn.close()
+    
+    # Organize data for the template
+    countries_data = {}
+    for state in current_states:
+        country_tag = state['country_tag']
+        if country_tag not in countries_data:
+            countries_data[country_tag] = {
+                'current_state': state,
+                'annual_income': [],
+                'historical_events': []
+            }
+    
+    for income in annual_incomes:
+        country_tag = income['country_tag']
+        if country_tag in countries_data:
+            countries_data[country_tag]['annual_income'].append(income)
+    
+    for event in historical_events:
+        country_tag = event['country_tag']
+        if country_tag in countries_data:
+            countries_data[country_tag]['historical_events'].append(event)
+    
+    return render_template('file_details.html', file_info=file_info, countries_data=countries_data)
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)

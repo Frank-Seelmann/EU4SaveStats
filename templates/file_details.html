@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ file_info['file_name'] }} Details</title>
+</head>
+<body>
+    <h1>{{ file_info['file_name'] }} - {{ file_info['upload_time'] }}</h1>
+    <h2>Countries Leaderboard</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Country Tag</th>
+                <th>Date</th>
+                <th>Income</th>
+                <th>Manpower</th>
+                <th>Max Manpower</th>
+                <th>Trade Income</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for country_tag, data in countries_data.items() %}
+                <tr>
+                    <td>{{ country_tag }}</td>
+                    <td>{{ data['current_state']['date'] }}</td>
+                    <td>{{ data['current_state']['income'] }}</td>
+                    <td>{{ data['current_state']['manpower'] }}</td>
+                    <td>{{ data['current_state']['max_manpower'] }}</td>
+                    <td>{{ data['current_state']['trade_income'] }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Annual Income</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Country Tag</th>
+                <th>Year</th>
+                <th>Income</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for country_tag, data in countries_data.items() %}
+                {% for income in data['annual_income'] %}
+                    <tr>
+                        <td>{{ country_tag }}</td>
+                        <td>{{ income['year'] }}</td>
+                        <td>{{ income['income'] }}</td>
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Historical Events</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Country Tag</th>
+                <th>Date</th>
+                <th>Event Type</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for country_tag, data in countries_data.items() %}
+                {% for event in data['historical_events'] %}
+                    <tr>
+                        <td>{{ country_tag }}</td>
+                        <td>{{ event['date'] }}</td>
+                        <td>{{ event['event_type'] }}</td>
+                        <td>{{ event['details'] }}</td>
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

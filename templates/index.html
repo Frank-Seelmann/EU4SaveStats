@@ -3,63 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EU4 Save Stats</title>
+    <title>EU4 Save Files</title>
 </head>
 <body>
-    <h1>Current State</h1>
-    <table border="1">
-        <tr>
-            <th>Date</th>
-            <th>Income</th>
-            <th>Manpower</th>
-            <th>Max Manpower</th>
-            <th>Trade Income</th>
-        </tr>
-        <tr>
-            <td>{{ current_state.date }}</td>
-            <td>{{ current_state.income }}</td>
-            <td>{{ current_state.manpower }}</td>
-            <td>{{ current_state.max_manpower }}</td>
-            <td>{{ current_state.trade_income }}</td>
-        </tr>
-    </table>
-
-    <h1>Historical Events</h1>
-    <table border="1">
-        <tr>
-            <th>Date</th>
-            <th>Event Type</th>
-            <th>Details</th>
-        </tr>
-        {% for event in historical_events %}
-        <tr>
-            <td>{{ event.date }}</td>
-            <td>{{ event.event_type }}</td>
-            <td>{{ event.details }}</td>
-        </tr>
-        {% else %}
-        <tr>
-            <td colspan="3">No historical events found.</td>
-        </tr>
+    <h1>Uploaded Files</h1>
+    <ul>
+        {% for file in files %}
+            <li>
+                <a href="{{ url_for('file_details', file_id=file['id']) }}">
+                    {{ file['file_name'] }} - {{ file['upload_time'] }}
+                </a>
+            </li>
         {% endfor %}
-    </table>
-
-    <h1>Annual Income</h1>
-    <table border="1">
-        <tr>
-            <th>Year</th>
-            <th>Income</th>
-        </tr>
-        {% for income in annual_income %}
-        <tr>
-            <td>{{ income.year }}</td>
-            <td>{{ income.income }}</td>
-        </tr>
-        {% else %}
-        <tr>
-            <td colspan="2">No annual income data found.</td>
-        </tr>
-        {% endfor %}
-    </table>
+    </ul>
 </body>
 </html>
