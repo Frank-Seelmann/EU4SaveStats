@@ -1,0 +1,40 @@
+# Rust-specific files
+/target/          # Rust build output directory
+**/*.rs.bk        # Backup files for Rust source code
+
+# Python-specific files
+__pycache__/      # Python bytecode cache
+*.py[cod]         # Python compiled files
+*.so              # Shared object files (Python extensions)
+*.egg-info/       # Python package metadata
+dist/             # Python distribution folders
+build/            # Python build output
+venv/             # Python virtual environment
+.env              # Environment variables (often contains sensitive data)
+
+# IDE and editor files
+.vscode/          # Visual Studio Code settings
+.idea/            # JetBrains IDE settings
+*.swp             # Vim swap files
+*.swo             # Vim swap files
+
+# System files
+Thumbs.db         # Windows thumbnail cache
+desktop.ini       # Windows folder customization
+
+# Logs and databases
+*.log             # Log files
+*.sqlite          # SQLite database files
+*.db              # Generic database files
+
+# Frontend-specific files (if applicable)
+node_modules/     # Node.js dependencies (if you have a frontend)
+package-lock.json # Node.js lock file (if applicable)
+yarn.lock         # Yarn lock file (if applicable)
+
+# Miscellaneous
+*.bak             # Backup files
+*.tmp             # Temporary files
+*.orig            # Merge conflict files
+*.patch           # Patch files
+*.diff            # Diff files
