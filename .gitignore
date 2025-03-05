@@ -1,5 +1,6 @@
 # Rust-specific files
 /target/          # Rust build output directory
+target
 **/*.rs.bk        # Backup files for Rust source code
 
 # Python-specific files
