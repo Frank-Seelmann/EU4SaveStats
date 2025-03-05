@@ -4,11 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ file_info['file_name'] }} Details</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
     <h1>{{ file_info['file_name'] }} - {{ file_info['upload_time'] }}</h1>
+    <h2>Annual Income Plot</h2>
+    <img src="data:image/png;base64,{{ plot_url }}" alt="Annual Income Plot">
+    
     <h2>Countries Leaderboard</h2>
-    <table border="1">
+    <table id="leaderboard">
         <thead>
             <tr>
                 <th>Country Tag</th>
@@ -33,30 +53,8 @@
         </tbody>
     </table>
 
-    <h2>Annual Income</h2>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>Country Tag</th>
-                <th>Year</th>
-                <th>Income</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for country_tag, data in countries_data.items() %}
-                {% for income in data['annual_income'] %}
-                    <tr>
-                        <td>{{ country_tag }}</td>
-                        <td>{{ income['year'] }}</td>
-                        <td>{{ income['income'] }}</td>
-                    </tr>
-                {% endfor %}
-            {% endfor %}
-        </tbody>
-    </table>
-
     <h2>Historical Events</h2>
-    <table border="1">
+    <table id="historicalEvents">
         <thead>
             <tr>
                 <th>Country Tag</th>
@@ -78,5 +76,12 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <script>
+        $(document).ready(function() {
+            $('#leaderboard').DataTable();
+            $('#historicalEvents').DataTable();
+        });
+    </script>
 </body>
 </html>

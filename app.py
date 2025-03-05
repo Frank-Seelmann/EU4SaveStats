@@ -1,5 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
+import matplotlib.pyplot as plt
+import io
+import base64
+import random
 
 app = Flask(__name__)
 
@@ -10,6 +14,23 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+def parse_country_colors(file_path):
+    country_colors = {}
+    with open(file_path, 'r') as file:
+        for line in file:
+            if '=' in line:
+                tag, color = line.split('=')
+                tag = tag.strip()
+                color = tuple(map(int, color.strip().split()))
+                country_colors[tag] = color
+    return country_colors
+
+# Load country colors from the generated file
+COUNTRY_COLORS = parse_country_colors('country_colors.txt')
+
+def get_country_color(country_tag):
+    return COUNTRY_COLORS.get(country_tag, (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
 @app.route('/')
 def index():
@@ -67,7 +88,28 @@ def file_details(file_id):
         if country_tag in countries_data:
             countries_data[country_tag]['historical_events'].append(event)
     
-    return render_template('file_details.html', file_info=file_info, countries_data=countries_data)
+    # Generate the annual income plot
+    plt.figure(figsize=(10, 6))
+    for country_tag, data in countries_data.items():
+        years = [int(income['year']) for income in data['annual_income']]
+        incomes = [income['income'] for income in data['annual_income']]
+        color = get_country_color(country_tag)
+        plt.plot(years, incomes, label=country_tag, color=(color[0]/255, color[1]/255, color[2]/255))
+    
+    plt.xlabel('Year')
+    plt.ylabel('Income')
+    plt.title('Annual Income by Country')
+    plt.legend()
+    plt.grid(True)
+    
+    # Save the plot to a BytesIO object
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plot_url = base64.b64encode(buf.getvalue()).decode('utf8')
+    plt.close()
+    
+    return render_template('file_details.html', file_info=file_info, countries_data=countries_data, plot_url=plot_url)
 
 if __name__ == '__main__':
     app.run(debug=True)
