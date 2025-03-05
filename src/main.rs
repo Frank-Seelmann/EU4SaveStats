@@ -6,7 +6,7 @@ use serde_json;
 use std::collections::BTreeMap;
 use sqlx::{sqlite::SqlitePool, Sqlite, migrate::MigrateDatabase};
 use sha2::{Sha256, Digest};
-
+use std::env;
 #[derive(Serialize, Deserialize, Debug)]  // Add Debug here
 struct CurrentState {
     date: String,
@@ -335,11 +335,31 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
 }
 
 #[async_std::main]
-async fn main() {
-    if let Err(e) = run("../stuff/mp_Scotland1474_07_04.eu4").await {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 && args[1] == "--init-db" {
+        // Initialize the database schema
+        let db_url = "sqlite:///C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db";
+        if !Sqlite::database_exists(db_url).await.unwrap_or(false) {
+            Sqlite::create_database(db_url).await?;
+        }
+        let pool = SqlitePool::connect(db_url).await?;
+        create_schema(&pool).await?;
+        println!("Database schema initialized successfully.");
+        return Ok(());
+    }
+
+    // Normal file processing logic
+    if args.len() < 2 {
+        eprintln!("Usage: {} <path_to_eu4_save_file>", args[0]);
+        return Ok(());
+    }
+
+    let file_path = &args[1];
+    if let Err(e) = run(file_path).await {
         eprintln!("Error: {}", e);
     }
-    if let Err(e) = run("../stuff/mp_Byzantium1527_11_02.eu4").await {
-        eprintln!("Error: {}", e);
-    }
+
+    Ok(())
 }

@@ -1,11 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, flash
 import sqlite3
 import matplotlib.pyplot as plt
 import io
 import base64
 import random
+import subprocess
+import os
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'  # Required for flashing messages
 
 # Database file path
 DATABASE = 'C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db'
@@ -14,6 +17,22 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+def initialize_database():
+    """Call the Rust backend to initialize the database schema."""
+    try:
+        result = subprocess.run(
+            ['cargo', 'run', '--', '--init-db'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print("Database schema initialized successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error initializing database schema: {e.stderr}")
+
+# Initialize the database schema when the application starts
+initialize_database()
 
 def parse_country_colors(file_path):
     country_colors = {}
@@ -38,6 +57,44 @@ def index():
     files = conn.execute('SELECT * FROM uploaded_files').fetchall()
     conn.close()
     return render_template('index.html', files=files)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        flash('No file uploaded.')
+        return redirect(url_for('index'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected.')
+        return redirect(url_for('index'))
+    
+    if not file.filename.endswith('.eu4'):
+        flash('Invalid file type. Please upload a .eu4 file.')
+        return redirect(url_for('index'))
+    
+    # Save the file to a temporary location
+    upload_folder = 'uploads'
+    os.makedirs(upload_folder, exist_ok=True)
+    file_path = os.path.join(upload_folder, file.filename)
+    file.save(file_path)
+    
+    # Call the Rust backend to process the file
+    try:
+        result = subprocess.run(
+            ['cargo', 'run', '--', file_path],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        flash('File processed successfully!')
+    except subprocess.CalledProcessError as e:
+        flash(f'Error processing file: {e.stderr}')
+    finally:
+        # Clean up the uploaded file
+        os.remove(file_path)
+    
+    return redirect(url_for('index'))
 
 @app.route('/file/<int:file_id>')
 def file_details(file_id):
