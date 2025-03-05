@@ -1,9 +1,0 @@
-C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\eu4_parser\target\debug\deps\libconcurrent_queue-2c20bb6012286a2d.rmeta: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\lib.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\bounded.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\single.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\unbounded.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\sync.rs
-
-C:\Users\frank\Desktop\Cloud Computing\EU4SaveStats\eu4_parser\target\debug\deps\concurrent_queue-2c20bb6012286a2d.d: C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\lib.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\bounded.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\single.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\unbounded.rs C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\sync.rs
-
-C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\lib.rs:
-C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\bounded.rs:
-C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\single.rs:
-C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\unbounded.rs:
-C:\Users\frank\.cargo\registry\src\index.crates.io-6f17d22bba15001f\concurrent-queue-2.5.0\src\sync.rs:
