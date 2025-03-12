@@ -4,10 +4,16 @@ use std::{fs, error::Error};
 use serde::{Serialize, Deserialize};
 use serde_json;
 use std::collections::BTreeMap;
-use sqlx::{sqlite::SqlitePool, Sqlite, migrate::MigrateDatabase};
 use sha2::{Sha256, Digest};
 use std::env;
-#[derive(Serialize, Deserialize, Debug)]  // Add Debug here
+use sqlx::MySqlPool;
+use aws_sdk_s3::Client;
+use std::fs::File;
+use std::io::Write;
+use aws_config::meta::region::RegionProviderChain;
+use dotenv::dotenv;
+
+#[derive(Serialize, Deserialize, Debug)]
 struct CurrentState {
     date: String,
     income: Vec<f64>,
@@ -24,59 +30,77 @@ struct HistoricalEvent {
     details: String,
 }
 
-async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "PRAGMA foreign_keys = ON;"
-    ).execute(pool).await?;
+async fn download_from_s3(client: &Client, bucket: &str, key: &str, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let response = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .send()
+        .await?;
 
-    // Table to track uploaded files
+    let mut file = File::create(file_path)?;
+    let bytes = response.body.collect().await?;
+    file.write_all(&bytes.into_bytes())?;
+    Ok(())
+}
+
+// Table to track uploaded files
+async fn create_schema(pool: &MySqlPool) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS uploaded_files (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        r#"
+        CREATE TABLE IF NOT EXISTS uploaded_files (
+            id INT AUTO_INCREMENT PRIMARY KEY,
             file_name TEXT NOT NULL,
-            file_checksum TEXT NOT NULL UNIQUE,
-            upload_time DATETIME DEFAULT CURRENT_TIMESTAMP
-        );"
+            file_checksum VARCHAR(64) NOT NULL UNIQUE,
+            upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        "#
     ).execute(pool).await?;
 
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS current_state (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        r#"
+        CREATE TABLE IF NOT EXISTS current_state (
+            id INT AUTO_INCREMENT PRIMARY KEY,
             file_checksum TEXT NOT NULL,
             country_tag TEXT NOT NULL,
             date TEXT NOT NULL,
             income TEXT NOT NULL,
-            manpower REAL NOT NULL,
-            max_manpower REAL NOT NULL,
-            trade_income REAL NOT NULL
-        );"
+            manpower FLOAT NOT NULL,
+            max_manpower FLOAT NOT NULL,
+            trade_income FLOAT NOT NULL
+        );
+        "#
     ).execute(pool).await?;
 
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS historical_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        r#"
+        CREATE TABLE IF NOT EXISTS historical_events (
+            id INT AUTO_INCREMENT PRIMARY KEY,
             file_checksum TEXT NOT NULL,
             country_tag TEXT NOT NULL,
             date TEXT NOT NULL,
             event_type TEXT NOT NULL,
             details TEXT NOT NULL
-        );"
+        );
+        "#
     ).execute(pool).await?;
 
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS annual_income (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        r#"
+        CREATE TABLE IF NOT EXISTS annual_income (
+            id INT AUTO_INCREMENT PRIMARY KEY,
             file_checksum TEXT NOT NULL,
             country_tag TEXT NOT NULL,
             year TEXT NOT NULL,
-            income REAL NOT NULL
-        );"
+            income FLOAT NOT NULL
+        );
+        "#
     ).execute(pool).await?;
 
     Ok(())
 }
 
-/// Calculate the SHA-256 checksum of a file
+// Calculate the SHA-256 checksum of a file
 fn calculate_checksum(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
@@ -96,19 +120,24 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
         .unwrap()
         .to_string();
 
-    // Connect to SQLite database
-    let db_url = "sqlite:///C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db";
+    // Connect to MySQL database
+    let db_host = env::var("DB_HOST").expect("DB_HOST not set in .env");
+    let db_user = env::var("DB_USER").expect("DB_USER not set in .env");
+    let db_password = env::var("DB_PASSWORD").expect("DB_PASSWORD not set in .env");
+    let db_name = env::var("DB_NAME").expect("DB_NAME not set in .env");
+
+    let db_url = format!("mysql://{}:{}@{}/{}", db_user, db_password, db_host, db_name);
+
     println!("Checking if database exists at: {}", db_url);
 
-    if !Sqlite::database_exists(db_url).await.unwrap_or(false) {
-        println!("Database does not exist. Creating it...");
-        Sqlite::create_database(db_url).await.unwrap();
-        println!("Database created successfully.");
-    } else {
-        println!("Database already exists.");
-    }
+    // Create the database if it doesn't exist
+    let admin_db_url = format!("mysql://{}:{}@{}", db_user, db_password, db_host);
+    let admin_pool = MySqlPool::connect(&admin_db_url).await?;
+    sqlx::query(&format!("CREATE DATABASE IF NOT EXISTS {}", db_name))
+        .execute(&admin_pool)
+        .await?;
 
-    let pool = SqlitePool::connect(db_url).await.unwrap();
+    let pool = MySqlPool::connect(&db_url).await?;
     create_schema(&pool).await?;
 
     // Check if the file has already been processed
@@ -176,7 +205,7 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
 
         // Find the country in the save
         if let Some((_, country)) = save.game.countries.iter().find(|(tag, _)| tag.to_string() == country_tag) {
-            // Debug: Print country data
+             // Debug: Print country data
             println!("Country found: {}", country_tag);
             println!("Income: {:?}", country.ledger.income);
             println!("Manpower: {}", country.manpower);
@@ -334,32 +363,61 @@ pub async fn run(path: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load environment variables from .env file
+    dotenv().ok();
+
+    // Access environment variables
+    let db_host = env::var("DB_HOST").expect("DB_HOST not set in .env");
+    let db_user = env::var("DB_USER").expect("DB_USER not set in .env");
+    let db_password = env::var("DB_PASSWORD").expect("DB_PASSWORD not set in .env");
+    let db_name = env::var("DB_NAME").expect("DB_NAME not set in .env");
+
+    let db_url = format!("mysql://{}:{}@{}/{}", db_user, db_password, db_host, db_name);
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 && args[1] == "--init-db" {
         // Initialize the database schema
-        let db_url = "sqlite:///C:/Users/frank/Desktop/Cloud Computing/EU4SaveStats/sqlite.db";
-        if !Sqlite::database_exists(db_url).await.unwrap_or(false) {
-            Sqlite::create_database(db_url).await?;
-        }
-        let pool = SqlitePool::connect(db_url).await?;
+        let admin_db_url = format!("mysql://{}:{}@{}", db_user, db_password, db_host);
+        let admin_pool = MySqlPool::connect(&admin_db_url).await?;
+        sqlx::query(&format!("CREATE DATABASE IF NOT EXISTS {}", db_name))
+            .execute(&admin_pool)
+            .await?;
+
+        let pool = MySqlPool::connect(&db_url).await?;
         create_schema(&pool).await?;
         println!("Database schema initialized successfully.");
         return Ok(());
     }
 
-    // Normal file processing logic
-    if args.len() < 2 {
-        eprintln!("Usage: {} <path_to_eu4_save_file>", args[0]);
+    if args.len() > 1 && args[1] == "--help" {
+        println!("Usage: {} <s3_key>", args[0]);
         return Ok(());
     }
 
-    let file_path = &args[1];
-    if let Err(e) = run(file_path).await {
+    // Normal execution (process a file)
+    if args.len() < 2 {
+        eprintln!("Usage: {} <s3_key>", args[0]);
+        return Ok(());
+    }
+
+    let s3_key = &args[1];
+    let s3_bucket = "eusavestats-bucket";
+    let local_file_path = format!("/tmp/{}", s3_key.split('/').last().unwrap_or("file.eu4"));
+
+    let config = aws_config::load_from_env().await;
+    let client = Client::new(&config);
+
+    // Ensure the download_from_s3 function is awaited
+    download_from_s3(&client, s3_bucket, s3_key, &local_file_path).await?;
+
+    if let Err(e) = run(&local_file_path).await {
         eprintln!("Error: {}", e);
     }
+
+    std::fs::remove_file(local_file_path)?;
 
     Ok(())
 }

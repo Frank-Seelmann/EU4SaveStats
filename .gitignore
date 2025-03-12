@@ -39,3 +39,4 @@ yarn.lock         # Yarn lock file (if applicable)
 *.orig            # Merge conflict files
 *.patch           # Patch files
 *.diff            # Diff files
+*.env             # Duh
