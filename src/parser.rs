@@ -20,9 +20,12 @@ pub fn extract_current_state(
     current_date: &str,
     income_breakdown: &eu4save::query::CountryIncomeLedger,
 ) -> Result<CurrentState, Box<dyn Error>> {
+    println!("[EXTRACT] Extracting data for country: {}", country_tag);
     let country = query
         .country(&country_tag.parse()?)
         .ok_or("Country not found")?;
+    println!("[EXTRACT] Income ledger: {:?}", country.ledger.income);
+    println!("[EXTRACT] Manpower: {}/{}", country.manpower, country.max_manpower);
     let income = &country.ledger.income;
     let manpower = country.manpower;
     let max_manpower = country.max_manpower;

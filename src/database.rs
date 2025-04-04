@@ -217,13 +217,17 @@ pub async fn check_existing_file(pool: &MySqlPool, checksum: &str) -> Result<boo
 }
 
 pub async fn insert_file_metadata(
-    pool: &MySqlPool,  // Keep as pool since we need to begin a transaction
+    pool: &MySqlPool,  // Changed back to pool since we need multiple operations
     name: &str,
     checksum: &str,
     user_id: i64,
 ) -> Result<i64, Error> {
+    println!("[DEBUG] Starting file metadata insertion...");
+    
+    // Start a new transaction for this operation
     let mut tx = pool.begin().await?;
 
+    // Insert file metadata
     let file_result = sqlx::query("INSERT INTO uploaded_files (file_name, file_checksum) VALUES (?, ?)")
         .bind(name)
         .bind(checksum)
@@ -231,7 +235,9 @@ pub async fn insert_file_metadata(
         .await?;
 
     let file_id = file_result.last_insert_id() as i64;
+    println!("[DEBUG] Inserted file metadata with ID: {}", file_id);
 
+    // Set file ownership
     sqlx::query(
         "INSERT INTO user_file_permissions (file_id, user_id, permission_type) VALUES (?, ?, 'owner')"
     )
@@ -240,6 +246,7 @@ pub async fn insert_file_metadata(
     .execute(&mut tx)
     .await?;
 
+    println!("[DEBUG] File permissions set successfully");
     tx.commit().await?;
     Ok(file_id)
 }

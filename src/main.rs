@@ -26,12 +26,74 @@ async fn download_from_s3(
     key: &str,
     file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let response = client.get_object().bucket(bucket).key(key).send().await?;
+    // Normalize the key path (remove leading/trailing slashes)
+    let key = key.trim_matches('/');
+    
+    println!("[S3] Downloading s3://{}/{} to {}", bucket, key, file_path);
 
-    let mut file = fs::File::create(file_path)?;
+    // Verify object exists first
+    let _head = client.head_object()
+        .bucket(bucket)
+        .key(key)
+        .send()
+        .await
+        .map_err(|e| format!("S3 object not found: {} (Error: {})", key, e))?;
+
+    let response = client.get_object()
+        .bucket(bucket)
+        .key(key)
+        .send()
+        .await?;
+
+    let mut file = fs::File::create(file_path)
+        .map_err(|e| format!("Failed to create local file: {} (Error: {})", file_path, e))?;
+
     let bytes = response.body.collect().await?;
     file.write_all(&bytes.into_bytes())?;
+    
+    println!("[S3] Download completed successfully");
     Ok(())
+}
+
+async fn upload_to_s3(
+    client: &Client,
+    bucket: &str,
+    key: &str,
+    file_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use aws_sdk_s3::primitives::ByteStream;
+
+    // Normalize the key path
+    let key = key.trim_matches('/');
+    
+    println!("[S3] Uploading {} to s3://{}/{}", file_path, bucket, key);
+
+    let body = ByteStream::from_path(file_path).await
+        .map_err(|e| format!("Failed to read local file: {} (Error: {})", file_path, e))?;
+
+    client.put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(body)
+        .send()
+        .await?;
+
+    println!("[S3] Upload completed successfully");
+    Ok(())
+}
+
+async fn handle_s3_operations(
+    client: &Client,
+    operation: &str,  // "download" or "upload"
+    bucket: &str,
+    key: &str,
+    local_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match operation {
+        "download" => download_from_s3(client, bucket, key, local_path).await,
+        "upload" => upload_to_s3(client, bucket, key, local_path).await,
+        _ => Err("Invalid operation. Use 'download' or 'upload'".into()),
+    }
 }
 
 async fn handle_auth_command(
@@ -62,17 +124,12 @@ async fn handle_auth_command(
                 eprintln!("Usage: {} login <username> <password>", args[0]);
                 return Ok(());
             }
-            let user = auth::login_user(pool, &args[2], &args[3])
+            let response = auth::login_user(pool, &args[2], &args[3])
                 .await
                 .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
-
-            let response = AuthResponse {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                password_hash: user.password_hash,
-            };
-            println!("{}", serde_json::to_string(&response)?);
+            
+            // Print just the token
+            println!("{}", response.token);
         }
         "verify" => {
             if args.len() < 4 {
@@ -94,21 +151,68 @@ async fn handle_auth_command(
 }
 
 pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
-    // Verify file exists
-    if !std::path::Path::new(path).exists() {
-        return Err(format!("File not found at path: {}", path).into());
-    }
+    // Initialize AWS client
+    let config = aws_config::load_from_env().await;
+    let client = Client::new(&config);
+    let bucket = "eusavestats-bucket";
 
-    let data = fs::read(path)?;
-    let file_checksum = calculate_checksum(&data);
-    let file_name = std::path::Path::new(path)
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    println!("[DEBUG] Starting file processing for: {}", path);
 
-    println!("Starting processing for file: {}", file_name);
+    // Handle both S3 and local paths
+    let (data, file_checksum, file_name) = if path.starts_with("s3://") {
+        // S3 path handling
+        let key = path.trim_start_matches("s3://")
+                     .trim_start_matches(bucket)
+                     .trim_start_matches('/');
+        
+        println!("[DEBUG] Processing S3 file: s3://{}/{}", bucket, key);
+        
+        let temp_path = format!("/tmp/{}", key.split('/').last().unwrap_or("temp_save.eu4"));
+        println!("[DEBUG] Downloading to temporary file: {}", temp_path);
+
+        match download_from_s3(&client, bucket, key, &temp_path).await {
+            Ok(_) => {
+                let data = fs::read(&temp_path)?;
+                println!("[DEBUG] Downloaded {} bytes from S3", data.len());
+                let checksum = calculate_checksum(&data);
+                let name = std::path::Path::new(key)
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+                
+                // Clean up temp file
+                let _ = fs::remove_file(temp_path);
+                (data, checksum, name)
+            }
+            Err(e) => {
+                println!("[ERROR] S3 download failed: {}", e);
+                return Err(e);
+            }
+        }
+    } else {
+        // Local file handling
+        println!("[DEBUG] Processing local file: {}", path);
+        if !std::path::Path::new(path).exists() {
+            println!("[ERROR] File not found at path: {}", path);
+            return Err(format!("File not found at path: {}", path).into());
+        }
+
+        let data = fs::read(path)?;
+        println!("[DEBUG] File read successfully, size: {} bytes", data.len());
+        let checksum = calculate_checksum(&data);
+        println!("[DEBUG] Calculated checksum: {}", checksum);
+        let name = std::path::Path::new(path)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        (data, checksum, name)
+    };
+
+    println!("[DEBUG] Starting processing for file: {}", file_name);
 
     // Database setup
     let db_host = env::var("DB_HOST").expect("DB_HOST not set in .env");
@@ -121,33 +225,39 @@ pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
         db_user, db_password, db_host, db_name
     );
 
+    println!("[DEBUG] Connecting to database at: {}", db_url);
     let pool = MySqlPool::connect(&db_url).await?;
 
-    // Check if file already processed (outside transaction)
+    // Check if file already processed
+    println!("[DEBUG] Checking if file already processed...");
     if check_existing_file(&pool, &file_checksum).await? {
         println!("File '{}' already processed. Skipping...", file_name);
         return Ok(());
     }
 
     // Start transaction for all write operations
+    println!("[DEBUG] Starting database transaction...");
     let mut transaction = pool.begin().await?;
 
     // Process the file with user_id
+    println!("[DEBUG] Inserting file metadata with transaction...");
     let _file_id = insert_file_metadata(&pool, &file_name, &file_checksum, user_id).await?;
 
     // Parse the save file
+    println!("[DEBUG] Parsing save file...");
     let (save, save_query, _tokens) = parse_save_file(&data)?;
 
-    println!("Processing file: {}", file_name);
-    println!("Player tag: {}", save.meta.player);
-    println!("Date: {:?}", save.meta.date);
+    println!("[DEBUG] Processing file: {}", file_name);
+    println!("[DEBUG] Player tag: {}", save.meta.player);
+    println!("[DEBUG] Game date: {:?}", save.meta.date);
 
     let province_owners = save_query.province_owners();
     let nation_events = save_query.nation_events(&province_owners);
     let player_histories = save_query.player_histories(&nation_events);
+    println!("[DEBUG] Found {} player histories", player_histories.len());
 
     if player_histories.is_empty() {
-        eprintln!("Warning: No player histories found in save file");
+        println!("[WARN] No player histories found in save file");
     }
 
     let mut processed_countries = 0;
@@ -156,16 +266,17 @@ pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
 
     for player_history in player_histories {
         let country_tag = player_history.history.latest.to_string();
-        println!("Processing country: {}", country_tag);
+        println!("[DEBUG] Processing country: {}", country_tag);
 
         match save.game.countries.iter().find(|(tag, _)| tag.to_string() == country_tag) {
             Some((_, country)) => {
-                println!("Found country data for {}", country_tag);
+                println!("[DEBUG] Found matching country data");
                 
                 let country_query = save_query.country(&country_tag.parse()?)
                     .ok_or(format!("Country {} not found in query", country_tag))?;
                 
                 let income_breakdown = save_query.country_income_breakdown(country_query);
+                println!("[DEBUG] Income breakdown: {:?}", income_breakdown);
 
                 // Process current state
                 let current_state = extract_current_state(
@@ -174,35 +285,41 @@ pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
                     &format!("{:?}", save.meta.date),
                     &income_breakdown,
                 )?;
+                println!("[DEBUG] Current state extracted: {:?}", current_state);
 
+                println!("[DEBUG] Saving current state...");
                 save_current_state(&mut transaction, &file_checksum, &country_tag, &current_state).await?;
+                println!("[DEBUG] Current state saved successfully");
 
                 // Process historical events
                 let events = extract_historical_events(&country.history.events);
                 processed_events += events.len();
+                println!("[DEBUG] Saving {} historical events...", events.len());
                 for event in events {
                     save_historical_event(&mut transaction, &file_checksum, &country_tag, &event).await?;
                 }
 
                 // Process annual income
                 processed_income_entries += current_state.annual_income.len();
+                println!("[DEBUG] Saving {} annual income entries...", current_state.annual_income.len());
                 for (year, income) in current_state.annual_income {
                     save_annual_income(&mut transaction, &file_checksum, &country_tag, &year, income).await?;
                 }
 
                 processed_countries += 1;
-                println!("Successfully processed data for {}", country_tag);
+                println!("[DEBUG] Successfully processed data for {}", country_tag);
             }
             None => {
-                eprintln!("No country found for tag: {}", country_tag);
+                println!("[WARN] No matching country found for tag: {}", country_tag);
             }
         }
     }
 
-    // Commit the transaction
+    println!("[DEBUG] Committing transaction...");
     transaction.commit().await?;
+    println!("[DEBUG] Transaction committed successfully");
 
-    println!("\nProcessing complete:");
+    println!("\n[SUCCESS] Processing complete:");
     println!("- Countries processed: {}", processed_countries);
     println!("- Historical events saved: {}", processed_events);
     println!("- Annual income entries saved: {}", processed_income_entries);
@@ -214,8 +331,8 @@ pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-
     let args: Vec<String> = env::args().collect();
+    println!("[START] Program started with args: {:?}", args);
 
     if args.len() > 1 {
         match args[1].as_str() {
@@ -239,7 +356,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let pool = MySqlPool::connect(&db_url).await?;
                 create_schema(&pool).await?;
                 println!("Database initialized");
-                return Ok(());
+                Ok(())
             }
             "register" | "login" | "verify" => {
                 let db_url = format!(
@@ -250,7 +367,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     env::var("DB_NAME")?
                 );
                 let pool = MySqlPool::connect(&db_url).await?;
-                return handle_auth_command(&pool, &args).await;
+                handle_auth_command(&pool, &args).await
+            }
+            "--local" => {
+                println!("[DEBUG] Args received: {:?}", args);
+                
+                if args.len() < 3 {
+                    eprintln!("Usage: {} --local <file_path> <user_id>", args[0]);
+                    eprintln!("       {} --local token:<token> <file_path>", args[0]);
+                    return Ok(());
+                }
+
+                let (file_path, user_id) = if args[2].starts_with("token:") {
+                    let token = args[2].trim_start_matches("token:");
+                    println!("[DEBUG] Token after stripping prefix: '{}'", token);
+                    
+                    let db_url = format!(
+                        "mysql://{}:{}@{}/{}",
+                        env::var("DB_USER")?,
+                        env::var("DB_PASSWORD")?,
+                        env::var("DB_HOST")?,
+                        env::var("DB_NAME")?
+                    );
+                    let pool = MySqlPool::connect(&db_url).await?;
+                    let user = auth::verify_auth_token(&pool, token).await?;
+                    (args[3].to_string(), user.id)
+                } else {
+                    (args[2].to_string(), args[3].parse()?)
+                };
+
+                run(&file_path, user_id).await
             }
             _ => {
                 // File processing - require authentication first
@@ -282,11 +428,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 download_from_s3(&client, s3_bucket, s3_key, &local_file_path).await?;
 
-                if let Err(e) = run(&local_file_path, user_id).await {
-                    eprintln!("Error: {}", e);
-                }
-
+                let result = run(&local_file_path, user_id).await;
                 fs::remove_file(local_file_path)?;
+                result
             }
         }
     } else {
@@ -297,7 +441,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("  login <user> <pass>            Login user");
         eprintln!("  verify <user_id> <pass>        Verify password");
         eprintln!("  <auth_token> <s3_key>  Process EU4 save file (authenticated)");
+        eprintln!("  --local <file_path> <user_id>  Process local file");
+        eprintln!("  --local token:<token> <file_path>  Process local file with auth");
+        Ok(())
     }
-
-    Ok(())
 }
