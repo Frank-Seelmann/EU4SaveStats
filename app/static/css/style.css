@@ -1,0 +1,21 @@
+body {
+    padding-top: 20px;
+    padding-bottom: 60px;
+}
+
+.container {
+    max-width: 1200px;
+}
+
+.table {
+    margin-top: 20px;
+}
+
+.card {
+    margin-bottom: 20px;
+}
+
+.img-fluid {
+    max-width: 100%;
+    height: auto;
+}

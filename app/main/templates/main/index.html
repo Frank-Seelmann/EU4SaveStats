@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Uploaded Files</h2>
+
+{% if files %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>Filename</th>
+            <th>Upload Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for file in files %}
+        <tr>
+            <td>{{ file.file_name }}</td>
+            <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>
+                <a href="{{ url_for('main.file_details', file_id=file.id) }}" 
+                    class="btn btn-sm btn-primary">
+                    View
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No files uploaded yet.</div>
+{% endif %}
+    
+    <h2 class="mt-4">Upload a New Save File</h2>
+    <form action="{{ url_for('main.upload_file') }}" method="post" enctype="multipart/form-data">
+        <div class="input-group">
+            <input type="file" name="file" class="form-control" accept=".eu4" required>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
