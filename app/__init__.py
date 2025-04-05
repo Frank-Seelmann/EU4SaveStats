@@ -1,24 +1,13 @@
 from flask import Flask
 from flask_login import LoginManager
-from app.config import Config
-from app.models import User
-from app.utils import get_db_connection
+from .config import Config
+from .models import User
+from .database import Database
+from .auth_service import AuthService
 import os
 
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
-
-@login_manager.user_loader
-def load_user(user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
-    user_data = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    if user_data:
-        return User(user_data['id'], user_data['username'], user_data['email'], user_data['password_hash'])
-    return None
 
 def create_app():
     app = Flask(__name__)
@@ -26,16 +15,42 @@ def create_app():
 
     # Initialize extensions
     login_manager.init_app(app)
+    
+    # Initialize database
+    Database()  # This will create tables if they don't exist
 
     # Register blueprints
-    from app.auth.routes import auth_bp
-    from app.friends.routes import friends_bp
-    from app.main.routes import main_bp
-
+    from .auth.routes import auth_bp
+    from .main.routes import main_bp
+    
     app.register_blueprint(auth_bp)
-    app.register_blueprint(friends_bp)
     app.register_blueprint(main_bp)
 
     os.makedirs(os.path.join(app.instance_path, 'temp'), exist_ok=True)
+    os.makedirs('processed', exist_ok=True)
+
+    from app.friends.routes import friends_bp
+    app.register_blueprint(friends_bp)
 
     return app
+
+@login_manager.user_loader
+def load_user(user_id):
+    db = Database()
+    conn = db._get_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
+        user_data = cursor.fetchone()
+        if user_data:
+            return User(
+                id=user_data['id'],
+                username=user_data['username'],
+                email=user_data['email'],
+                password_hash=user_data['password_hash']
+            )
+        return None
+    finally:
+        cursor.close()
+        conn.close()

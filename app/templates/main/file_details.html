@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>{{ file_data.original_filename }}</h2>
+<p>Processed on: {{ file_data.processed_at|datetimeformat }}</p>
+
+{% for country in countries %}
+<div class="country-section">
+    <h3>{{ country.country_tag }}</h3>
+    
+    <h4>Current State</h4>
+    <p>Date: {{ country.current_state.date }}</p>
+    <p>Manpower: {{ country.current_state.manpower }} / {{ country.current_state.max_manpower }}</p>
+    
+    <h4>Annual Income</h4>
+    <table>
+        <tr>
+            <th>Year</th>
+            <th>Income</th>
+        </tr>
+        {% for income in country.annual_income %}
+        <tr>
+            <td>{{ income.year }}</td>
+            <td>{{ income.income }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    
+    <h4>Historical Events</h4>
+    <ul>
+        {% for event in country.historical_events %}
+        <li>
+            <strong>{{ event.date }} - {{ event.event_type }}</strong><br>
+            {{ event.details }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endfor %}
+{% endblock %}

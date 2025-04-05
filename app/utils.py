@@ -1,7 +1,6 @@
 import mysql.connector
 from app.config import Config
 import subprocess
-import os
 import random
 
 def get_db_connection():

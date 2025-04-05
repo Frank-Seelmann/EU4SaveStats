@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Your Processed Files</h2>
+<div class="file-list">
+    {% for file in files %}
+    <div class="file-card">
+        <h3>{{ file.original_filename }}</h3>
+        <p>Processed: {{ file.timestamp|datetimeformat }}</p>
+        <a href="{{ url_for('main.file_details', checksum=file.checksum) }}" class="btn">
+            View Details
+        </a>
+    </div>
+    {% else %}
+    <p>No files processed yet.</p>
+    {% endfor %}
+</div>
+
+<form method="post" enctype="multipart/form-data" action="{{ url_for('main.upload_file') }}">
+    <input type="file" name="file" accept=".eu4" required>
+    <button type="submit" class="btn">Upload EU4 Save</button>
+</form>
+{% endblock %}

@@ -1,7 +1,8 @@
-use crate::database::{CurrentState, HistoricalEvent};
+use crate::{CurrentState, HistoricalEvent};
 use eu4save::models::{CountryEvent, Eu4Save};
 use eu4save::query::Query;
 use eu4save::{Eu4File, SegmentedResolver};
+use sha2::{Digest, Sha256};
 use std::error::Error;
 
 /// Parses EU4 save file and returns parsed data structures
@@ -117,4 +118,11 @@ pub fn extract_historical_events(
     }
 
     historical_events
+}
+
+/// Utility function to calculate file checksum
+pub fn calculate_checksum(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
 }

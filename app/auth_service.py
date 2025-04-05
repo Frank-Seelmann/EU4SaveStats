@@ -1,73 +1,63 @@
-import subprocess
-import json
+import bcrypt
+from .database import Database
+from .models import User
 from typing import Optional
-from models import User
 
 class AuthService:
     @staticmethod
     def register_user(username: str, email: str, password: str) -> Optional[User]:
+        """Register a new user with password hashing"""
+        db = Database()
+        conn = db._get_connection()
+        cursor = conn.cursor(dictionary=True)
+        
         try:
-            result = subprocess.run(
-                ['./eu4_parser', 'register', username, email, password],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            user_data = json.loads(result.stdout)
-            return User(
-                id=user_data['id'],
-                username=user_data['username'],
-                email=user_data['email'],
-                password_hash=user_data['password_hash']
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Registration failed: {e.stderr}")
-            return None
+            # Check if user exists
+            cursor.execute('SELECT id FROM users WHERE username = %s OR email = %s', 
+                         (username, email))
+            if cursor.fetchone():
+                return None
+            
+            # Hash password
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            # Create user
+            cursor.execute('''
+                INSERT INTO users (username, email, password_hash)
+                VALUES (%s, %s, %s)
+            ''', (username, email, password_hash))
+            
+            user_id = cursor.lastrowid
+            conn.commit()
+            
+            return User(user_id, username, email, password_hash)
+        except Exception as e:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def login_user(username: str, password: str) -> Optional[User]:
-        try:
-            result = subprocess.run(
-                ['./eu4_parser', 'login', username, password],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            user_data = json.loads(result.stdout)
-            return User(
-                id=user_data['id'],
-                username=user_data['username'],
-                email=user_data['email'],
-                password_hash=user_data['password_hash']
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Login failed: {e.stderr}")
-            return None
+        """Authenticate user and return User object if successful"""
+        db = Database()
+        conn = db._get_connection()
+        cursor = conn.cursor(dictionary=True)
         
-
-    @staticmethod
-    def process_file(auth_token: str, s3_key: str) -> bool:
         try:
-            # Get current environment (preserve existing vars)
-            env = os.environ.copy()
+            cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
+            user_data = cursor.fetchone()
             
-            env["DEBUG_MODE"] = "1"  # Force debug mode
-            print("[DEBUG] AUTHENTICATION BYPASSED (DEBUG_MODE=1)")
-            
-            result = subprocess.run(
-                ['./eu4_parser', auth_token, s3_key],  # Normal arguments
-                capture_output=True,
-                text=True,
-                check=True,
-                env=env  # Pass the modified environment
-            )
-            
-            print("Rust Output:", result.stdout)
-            if result.stderr:
-                print("Rust Errors:", result.stderr)
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"Processing failed. Exit Code: {e.returncode}")
-            print("Output:", e.stdout)
-            print("Errors:", e.stderr)
-            return False
+            if user_data and bcrypt.checkpw(password.encode('utf-8'), 
+                                          user_data['password_hash'].encode('utf-8')):
+                return User(
+                    user_data['id'],
+                    user_data['username'],
+                    user_data['email'],
+                    user_data['password_hash']
+                )
+            return None
+        finally:
+            cursor.close()
+            conn.close()
