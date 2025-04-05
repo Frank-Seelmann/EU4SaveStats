@@ -1,5 +1,4 @@
 from flask_login import UserMixin
-from werkzeug.security import check_password_hash
 import subprocess
 
 class User(UserMixin):
@@ -10,7 +9,7 @@ class User(UserMixin):
         self.password_hash = password_hash
 
     def verify_password(self, password: str) -> bool:
-        """Verify password against the stored hash using the Rust backend"""
+        """Verify password using Rust backend"""
         try:
             result = subprocess.run(
                 ['./eu4_parser', 'verify', str(self.id), password],

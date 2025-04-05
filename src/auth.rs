@@ -62,14 +62,15 @@ pub async fn login_user(
     password: &str,
 ) -> Result<LoginResponse, AuthError> {
     let user = get_user_by_username(pool, username).await?;
-    verify_password(&user.password_hash, password)?;
-    
-    let token = format!("{}-{}", user.id, hex::encode(rand::random::<[u8; 16]>()));
-    
-    Ok(LoginResponse {
-        token,
-        user_id: user.id,
-    })
+    if verify_password(&user.password_hash, password).is_ok() {
+        let token = format!("{}-{}", user.id, hex::encode(rand::random::<[u8; 16]>()));
+        Ok(LoginResponse {
+            token,
+            user_id: user.id,
+        })
+    } else {
+        Err(AuthError::InvalidCredentials)
+    }
 }
 
 pub async fn verify_user_password(

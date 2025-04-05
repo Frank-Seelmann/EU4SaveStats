@@ -49,17 +49,37 @@ def upload_file():
     
     file = request.files['file']
     
-    # If user doesn't select file, browser submits empty file without filename
     if file.filename == '':
         flash('No file selected', 'error')
         return redirect(url_for('main.index'))
     
     if file and allowed_file(file.filename):
+        conn = None
+        cursor = None
+        existing_file = None  # Initialize variable here
+        temp_path = None
+        
         try:
             filename = secure_filename(file.filename)
             file_content = file.read()
             file_checksum = hashlib.sha256(file_content).hexdigest()
             
+            # Create temp directory if it doesn't exist
+            temp_dir = os.path.join(current_app.instance_path, 'temp')
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            # Save file with full path
+            temp_path = os.path.join(temp_dir, filename)
+            with open(temp_path, 'wb') as f:
+                f.write(file_content)
+            
+            # Verify file was written
+            if not os.path.exists(temp_path):
+                raise Exception(f"Failed to create temp file at {temp_path}")
+            
+            current_app.logger.debug(f"Temp file created at {temp_path}")
+            
+            # Database operations
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
             
@@ -95,37 +115,75 @@ def upload_file():
             
             # Process file with Rust backend (only if new file)
             if not existing_file:
-                # Save temp file for processing
-                temp_path = os.path.join(current_app.instance_path, 'temp', filename)
-                os.makedirs(os.path.dirname(temp_path), exist_ok=True)
-                with open(temp_path, 'wb') as f:
-                    f.write(file_content)
-                
-                # Process with Rust backend
-                result = subprocess.run(
-                    ['./eu4_parser', 'process', temp_path, file_checksum],
-                    capture_output=True,
-                    text=True
-                )
-                
-                # Clean up temp file
-                os.remove(temp_path)
-                
-                if result.returncode != 0:
-                    raise Exception(f"Processing failed: {result.stderr}")
+                try:
+                    abs_path = os.path.abspath(temp_path)
+                    current_app.logger.debug(f"Processing file at {abs_path}")
+                    
+                    # DEBUG: Verify file exists before processing
+                    if not os.path.exists(abs_path):
+                        raise Exception(f"Temp file missing at {abs_path} before processing")
+                    
+                    # Add delay for debugging
+                    import time
+                    time.sleep(2)  # Give time to verify file exists
+                    
+                    result = subprocess.run(
+                        ['./eu4_parser', '--local', abs_path, str(current_user.id)],
+                        capture_output=True,
+                        text=True
+                    )
+
+                    for line in result.stdout.splitlines():
+                        current_app.logger.debug(f"[RUST] {line}")
+                    
+                    if result.returncode != 0:
+                        raise Exception(f"Processing failed: {result.stderr}")
+                    if result.stderr:
+                        for line in result.stderr.splitlines():
+                            current_app.logger.error(f"[RUST-ERR] {line}")
+                    
+                    # DEBUG: Keep file for inspection if in development
+                    if current_app.config['ENV'] == 'development':
+                        debug_path = os.path.join(temp_dir, f"debug_{filename}")
+                        os.rename(temp_path, debug_path)
+                        current_app.logger.debug(f"Saved debug file at {debug_path}")
+                except Exception as e:
+                    if conn and cursor and 'file_id' in locals():
+                        try:
+                            # First delete permissions, then the file entry
+                            cursor.execute('DELETE FROM user_file_permissions WHERE file_id = %s', (file_id,))
+                            cursor.execute('DELETE FROM uploaded_files WHERE id = %s', (file_id,))
+                            conn.commit()
+                        except Exception as db_error:
+                            conn.rollback()
+                            current_app.logger.error(f"Cleanup failed: {str(db_error)}")
+                    raise
+                finally:
+                    # Only clean up if not in debug mode
+                    if not current_app.config.get('DEBUG', False) and temp_path and os.path.exists(temp_path):
+                        os.remove(temp_path)
             
             flash('File uploaded successfully!', 'success')
             return redirect(url_for('main.index'))
             
         except Exception as e:
-            conn.rollback()
+            if conn:
+                conn.rollback()
             current_app.logger.error(f"Upload failed: {str(e)}")
             flash(f'File processing failed: {str(e)}', 'error')
             return redirect(url_for('main.index'))
             
         finally:
-            cursor.close()
-            conn.close()
+            # Clean up resources
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception as e:
+                    current_app.logger.error(f"Failed to remove temp file: {str(e)}")
     
     flash('Allowed file types are: .eu4, .zip', 'error')
     return redirect(url_for('main.index'))

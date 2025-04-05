@@ -12,6 +12,8 @@ use std::error::Error;
 use std::io::Write;
 use std::{env, fs};
 
+const DEBUG_NO_AUTH: bool = true;
+
 #[derive(Serialize)]
 struct AuthResponse {
     id: i64,
@@ -151,7 +153,7 @@ async fn handle_auth_command(
 }
 
 pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
-    // Initialize AWS client
+    // Initialize AWS client if needed
     let config = aws_config::load_from_env().await;
     let client = Client::new(&config);
     let bucket = "eusavestats-bucket";
@@ -215,14 +217,12 @@ pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
     println!("[DEBUG] Starting processing for file: {}", file_name);
 
     // Database setup
-    let db_host = env::var("DB_HOST").expect("DB_HOST not set in .env");
-    let db_user = env::var("DB_USER").expect("DB_USER not set in .env");
-    let db_password = env::var("DB_PASSWORD").expect("DB_PASSWORD not set in .env");
-    let db_name = env::var("DB_NAME").expect("DB_NAME not set in .env");
-
     let db_url = format!(
         "mysql://{}:{}@{}/{}",
-        db_user, db_password, db_host, db_name
+        env::var("DB_USER").map_err(|_| "DB_USER not set in .env")?,
+        env::var("DB_PASSWORD").map_err(|_| "DB_PASSWORD not set in .env")?,
+        env::var("DB_HOST").unwrap_or_else(|_| "localhost".to_string()),
+        env::var("DB_NAME").map_err(|_| "DB_NAME not set in .env")?
     );
 
     println!("[DEBUG] Connecting to database at: {}", db_url);
@@ -334,6 +334,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     println!("[START] Program started with args: {:?}", args);
 
+    // Check for debug mode (enable with DEBUG_MODE=1 in .env or environment)
+    let debug_mode = env::var("DEBUG_MODE").unwrap_or_default() == "1";
+    if debug_mode {
+        println!("[WARNING] DEBUG MODE ACTIVE - AUTHENTICATION CHECKS DISABLED");
+    }
+
     if args.len() > 1 {
         match args[1].as_str() {
             "--init-db" => {
@@ -378,33 +384,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Ok(());
                 }
 
-                let (file_path, user_id) = if args[2].starts_with("token:") {
-                    let token = args[2].trim_start_matches("token:");
-                    println!("[DEBUG] Token after stripping prefix: '{}'", token);
-                    
-                    let db_url = format!(
-                        "mysql://{}:{}@{}/{}",
-                        env::var("DB_USER")?,
-                        env::var("DB_PASSWORD")?,
-                        env::var("DB_HOST")?,
-                        env::var("DB_NAME")?
-                    );
-                    let pool = MySqlPool::connect(&db_url).await?;
-                    let user = auth::verify_auth_token(&pool, token).await?;
-                    (args[3].to_string(), user.id)
-                } else {
-                    (args[2].to_string(), args[3].parse()?)
-                };
-
-                run(&file_path, user_id).await
-            }
-            _ => {
-                // File processing - require authentication first
-                if args.len() < 3 {
-                    eprintln!("Usage: {} <auth_token> <s3_key>", args[0]);
-                    return Ok(());
-                }
-
+                // Connect to database first since we'll need it for both paths
                 let db_url = format!(
                     "mysql://{}:{}@{}/{}",
                     env::var("DB_USER")?,
@@ -414,9 +394,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
                 let pool = MySqlPool::connect(&db_url).await?;
 
-                // Verify the auth token and get user ID
-                let user = auth::verify_auth_token(&pool, &args[1]).await?;
-                let user_id = user.id;
+                let (file_path, user_id) = if args[2].starts_with("token:") {
+                    if debug_mode {
+                        println!("[DEBUG] Skipping token verification in debug mode");
+                        // Verify debug user exists in database
+                        let debug_user = database::get_user_by_id(&pool, 1).await
+                            .map_err(|_| "Debug user not found in database")?;
+                        (args[3].to_string(), debug_user.id)
+                    } else {
+                        let token = args[2].trim_start_matches("token:");
+                        println!("[DEBUG] Token after stripping prefix: '{}'", token);
+                        
+                        let user = auth::verify_auth_token(&pool, token).await?;
+                        // Additional verification that user exists and is active
+                        database::get_user_by_id(&pool, user.id).await?;
+                        (args[3].to_string(), user.id)
+                    }
+                } else {
+                    // For direct user_id usage, verify the user exists
+                    let user_id: i64 = args[3].parse()?;
+                    database::get_user_by_id(&pool, user_id).await?;
+                    (args[2].to_string(), user_id)
+                };
+
+                run(&file_path, user_id).await
+            }
+            _ => {
+                // File processing - with optional authentication
+                if args.len() < 3 {
+                    eprintln!("Usage: {} <auth_token> <s3_key>", args[0]);
+                    return Ok(());
+                }
+
+                let user_id = if debug_mode {
+                    println!("[DEBUG] Skipping authentication, using test user ID 1");
+                    1 // Default test user ID
+                } else {
+                    let db_url = format!(
+                        "mysql://{}:{}@{}/{}",
+                        env::var("DB_USER")?,
+                        env::var("DB_PASSWORD")?,
+                        env::var("DB_HOST")?,
+                        env::var("DB_NAME")?
+                    );
+                    let pool = MySqlPool::connect(&db_url).await?;
+                    let user = auth::verify_auth_token(&pool, &args[1]).await?;
+                    user.id
+                };
 
                 let s3_key = &args[2];
                 let s3_bucket = "eusavestats-bucket";

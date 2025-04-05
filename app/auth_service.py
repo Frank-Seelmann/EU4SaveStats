@@ -48,13 +48,26 @@ class AuthService:
     @staticmethod
     def process_file(auth_token: str, s3_key: str) -> bool:
         try:
+            # Get current environment (preserve existing vars)
+            env = os.environ.copy()
+            
+            env["DEBUG_MODE"] = "1"  # Force debug mode
+            print("[DEBUG] AUTHENTICATION BYPASSED (DEBUG_MODE=1)")
+            
             result = subprocess.run(
-                ['./eu4_parser', auth_token, s3_key],
+                ['./eu4_parser', auth_token, s3_key],  # Normal arguments
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                env=env  # Pass the modified environment
             )
+            
+            print("Rust Output:", result.stdout)
+            if result.stderr:
+                print("Rust Errors:", result.stderr)
             return True
         except subprocess.CalledProcessError as e:
-            print(f"File processing failed: {e.stderr}")
+            print(f"Processing failed. Exit Code: {e.returncode}")
+            print("Output:", e.stdout)
+            print("Errors:", e.stderr)
             return False
