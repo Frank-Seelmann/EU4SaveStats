@@ -4,8 +4,8 @@ target
 **/*.rs.bk        # Backup files for Rust source code
 
 # Python-specific files
-__pycache__/      # Python bytecode cache
-*.py[cod]         # Python compiled files
+**/__pycache__/      # Python bytecode cache
+**/.py[cod]         # Python compiled files
 *.so              # Shared object files (Python extensions)
 *.egg-info/       # Python package metadata
 dist/             # Python distribution folders
@@ -26,6 +26,7 @@ desktop.ini       # Windows folder customization
 *.log             # Log files
 *.sqlite          # SQLite database files
 *.db              # Generic database files
+**/processed/
 
 # Frontend-specific files (if applicable)
 node_modules/     # Node.js dependencies (if you have a frontend)
@@ -38,6 +39,4 @@ yarn.lock         # Yarn lock file (if applicable)
 *.orig            # Merge conflict files
 *.patch           # Patch files
 *.diff            # Diff files
-.env              # Duh
-*/.env
 **/.env
