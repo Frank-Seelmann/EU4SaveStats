@@ -1,23 +1,42 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Your Processed Files</h2>
-<div class="file-list">
-    {% for file in files %}
-    <div class="file-card">
-        <h3>{{ file.original_filename }}</h3>
-        <p>Processed: {{ file.timestamp|datetimeformat }}</p>
-        <a href="{{ url_for('main.file_details', checksum=file.checksum) }}" class="btn">
-            View Details
-        </a>
-    </div>
-    {% else %}
-    <p>No files processed yet.</p>
-    {% endfor %}
-</div>
+<h2>Uploaded Files</h2>
 
-<form method="post" enctype="multipart/form-data" action="{{ url_for('main.upload_file') }}">
-    <input type="file" name="file" accept=".eu4" required>
-    <button type="submit" class="btn">Upload EU4 Save</button>
-</form>
+{% if files %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>Filename</th>
+            <th>Upload Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for file in files %}
+        <tr>
+            <td>{{ file.original_filename }}</td>
+            <td>{{ file.timestamp if file.timestamp else file.processed_at|datetimeformat }}</td>
+            <td>
+                <a href="{{ url_for('main.file_details', checksum=file.checksum) }}" 
+                    class="btn btn-sm btn-primary">
+                    View
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No files uploaded yet.</div>
+{% endif %}
+    
+    <h2 class="mt-4">Upload a New Save File</h2>
+    <form action="{{ url_for('main.upload_file') }}" method="post" enctype="multipart/form-data">
+        <div class="input-group">
+            <input type="file" name="file" class="form-control" accept=".eu4" required>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </div>
+    </form>
+</div>
 {% endblock %}

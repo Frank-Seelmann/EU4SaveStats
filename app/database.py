@@ -432,26 +432,15 @@ class Database:
             conn.close()
 
     def get_user_files(self, user_id: int) -> List[Dict[str, Any]]:
-        """Get all files accessible to a user (both owned and shared)"""
+        """Get list of processed files for a user"""
         conn = self._get_connection()
         cursor = conn.cursor(dictionary=True)
-        
         try:
-            cursor.execute("""
-                SELECT uf.*, 
-                    u.username as owner_username,
-                    fp.permission_type
-                FROM uploaded_files uf
-                JOIN user_file_permissions fp ON uf.id = fp.file_id
-                JOIN users u ON (
-                    SELECT user_id FROM user_file_permissions 
-                    WHERE file_id = uf.id AND permission_type = 'owner'
-                    LIMIT 1
-                ) = u.id
-                WHERE fp.user_id = %s
-                ORDER BY uf.processed_at DESC
-            """, (user_id,))
-            
+            cursor.execute('''
+                SELECT * FROM uploaded_files 
+                WHERE user_id = %s 
+                ORDER BY processed_at DESC
+            ''', (user_id,))
             return cursor.fetchall()
         finally:
             cursor.close()
@@ -467,6 +456,51 @@ class Database:
                 WHERE checksum = %s AND user_id = %s
             ''', (checksum, user_id))
             return cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_current_state(self, checksum: str, country_tag: str) -> Optional[Dict[str, Any]]:
+        """Get current state for a specific country"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute('''
+                SELECT * FROM current_state 
+                WHERE file_checksum = %s AND country_tag = %s
+                ORDER BY date DESC LIMIT 1
+            ''', (checksum, country_tag))
+            return cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_annual_income(self, checksum: str, country_tag: str) -> List[Dict[str, Any]]:
+        """Get annual income data for a country"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute('''
+                SELECT year, income FROM annual_income 
+                WHERE file_checksum = %s AND country_tag = %s
+                ORDER BY year
+            ''', (checksum, country_tag))
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_historical_events(self, checksum: str, country_tag: str) -> List[Dict[str, Any]]:
+        """Get historical events for a country"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute('''
+                SELECT date, event_type, details FROM historical_events 
+                WHERE file_checksum = %s AND country_tag = %s
+                ORDER BY date
+            ''', (checksum, country_tag))
+            return cursor.fetchall()
         finally:
             cursor.close()
             conn.close()

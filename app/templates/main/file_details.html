@@ -1,40 +1,278 @@
 {% extends "base.html" %}
 
-{% block content %}
-<h2>{{ file_data.original_filename }}</h2>
-<p>Processed on: {{ file_data.processed_at|datetimeformat }}</p>
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
+<style>
+    .historical-events-table {
+    width: 100% !important;
+    }
+    .dataTables_wrapper {
+        position: relative;
+    }
+    .dataTables_scroll {
+        clear: both;
+    }
+    .dataTables_scrollBody {
+        overflow-y: auto !important;
+        max-height: 300px !important;
+        border-bottom: 1px solid #ddd !important;
+    }
+    .dataTables_scrollBody thead th {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+    }
+    #leaderboard_wrapper {
+        margin-bottom: 20px;
+    }
+    #leaderboard thead th {
+        position: sticky;
+        top: 0;
+        background: #343a40; /* Dark background to match thead-dark */
+        color: white;
+        z-index: 10;
+    }
+    .dataTables_scrollBody {
+        max-height: 500px !important;
+    }
+    .dataTables_filter input {
+        margin-left: 10px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        padding: 5px;
+    }
+</style>
+{% endblock %}
 
-{% for country in countries %}
-<div class="country-section">
-    <h3>{{ country.country_tag }}</h3>
-    
-    <h4>Current State</h4>
-    <p>Date: {{ country.current_state.date }}</p>
-    <p>Manpower: {{ country.current_state.manpower }} / {{ country.current_state.max_manpower }}</p>
-    
-    <h4>Annual Income</h4>
-    <table>
-        <tr>
-            <th>Year</th>
-            <th>Income</th>
-        </tr>
-        {% for income in country.annual_income %}
-        <tr>
-            <td>{{ income.year }}</td>
-            <td>{{ income.income }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    
-    <h4>Historical Events</h4>
-    <ul>
-        {% for event in country.historical_events %}
-        <li>
-            <strong>{{ event.date }} - {{ event.event_type }}</strong><br>
-            {{ event.details }}
-        </li>
-        {% endfor %}
-    </ul>
+{% block content %}
+<div class="container">
+    <div class="file-header">
+        <h1>{{ file_data.original_filename }}</h1>
+        <p class="text-muted">Processed on: {{ file_data.timestamp if file_data.timestamp else file_data.processed_at|datetimeformat }}</p>
+        
+        {% if current_user.id == file_data.user_id %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2>Share This File</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('main.share_file', checksum=file_data.checksum) }}">
+                    <div class="input-group">
+                        <input type="text" name="friend_username" class="form-control" placeholder="Friend's username" required>
+                        <button type="submit" class="btn btn-primary">Share</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if countries %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2>Countries Leaderboard</h2>
+        </div>
+        <div class="card-body table-responsive">
+            <table id="leaderboard" class="table table-striped data-table display nowrap" style="width:100%">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Country</th>
+                        <th>Date</th>
+                        <th>Income</th>
+                        <th>Manpower</th>
+                        <th>Max Manpower</th>
+                        <th>Trade Income</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for country in countries %}
+                    {% if country.current_state %}
+                    <tr>
+                        <td>{{ country.country_tag }}</td>
+                        <td>{{ country.current_state.date }}</td>
+                        <td>
+                            {% if country.current_state.income is string %}
+                                {{ country.current_state.income }}
+                            {% elif country.current_state.income is iterable and country.current_state.income is not string %}
+                                {% set income_sum = country.current_state.income|select('float')|sum %}
+                                {{ "%.2f"|format(income_sum) }}
+                            {% else %}
+                                {{ "%.2f"|format(country.current_state.income|float) }}
+                            {% endif %}
+                        </td>
+                        <td>{{ "%.2f"|format(country.current_state.manpower|float) }}</td>
+                        <td>{{ "%.2f"|format(country.current_state.max_manpower|float) }}</td>
+                        <td>{{ "%.2f"|format(country.current_state.trade_income|float) }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if plot_url %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2>Annual Income Plot</h2>
+        </div>
+        <div class="card-body">
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Annual Income Plot" class="img-fluid">
+        </div>
+    </div>
+    {% endif %}
+
+    {% for country in countries %}
+    <div class="country-section card">
+        <div class="card-header">
+            <h3>{{ country.country_tag }}</h3>
+        </div>
+        <div class="card-body">
+            {% if country.current_state %}
+            <div class="current-state">
+                <h4>Current State</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Date:</strong> {{ country.current_state.date }}</p>
+                        <p><strong>Manpower:</strong> {{ "%.2f"|format(country.current_state.manpower|float) }} / {{ "%.2f"|format(country.current_state.max_manpower|float) }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Trade Income:</strong> {{ "%.2f"|format(country.current_state.trade_income|float) }}</p>
+                        <p><strong>Income:</strong>
+                            {% if country.current_state.income is string %}
+                                {{ country.current_state.income }}
+                            {% elif country.current_state.income is iterable and country.current_state.income is not string %}
+                                {% set income_sum = country.current_state.income|select('float')|sum %}
+                                {{ "%.2f"|format(income_sum) }}
+                            {% else %}
+                                {{ "%.2f"|format(country.current_state.income|float) }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if country.annual_income %}
+            <div class="table-responsive">
+                <h4>Annual Income</h4>
+                <table class="table table-striped annual-income-table">
+                    <thead>
+                        <tr>
+                            <th>Year</th>
+                            <th>Income</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for income in country.annual_income %}
+                        <tr>
+                            <td>{{ income.year if income.year is defined else income.get('year', 'N/A') }}</td>
+                            <td>{{ "%.2f"|format(income.income|float) if income.income is defined else "N/A" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            
+            {% if country.historical_events %}
+            <div class="table-responsive">
+                <h4>Historical Events</h4>
+                <table id="historical-events-{{ country.country_tag }}" 
+                    class="historical-events-table display" 
+                    style="width:100%">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>Date</th>
+                            <th>Event Type</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in country.historical_events %}
+                        <tr>
+                            <td>{{ event.date }}</td>
+                            <td>{{ event.event_type }}</td>
+                            <td>{{ event.details }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="alert alert-info">
+        No country data available for this file.
+    </div>
+    {% endif %}
+
+    <div class="back-link">
+        <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+            <i class="fas fa-arrow-left"></i> Back to Files
+        </a>
+    </div>
 </div>
-{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+$(document).ready(function() {
+    // Initialize leaderboard table
+    $('#leaderboard').DataTable({
+        paging: true,
+        pageLength: 10,
+        lengthMenu: [10, 25, 50, 100],
+        ordering: true,
+        responsive: true,
+        dom: '<"top"lf>rt<"bottom"ip><"clear">',
+        order: [[2, 'desc']] // Default sort by Income (column index 2) descending
+    });
+
+    // Initialize historical events tables
+    $('.historical-events-table').each(function() {
+        $(this).DataTable({
+            scrollY: '300px',
+            scrollCollapse: true,
+            paging: false,
+            ordering: true,
+            responsive: true,
+            dom: '<"top"f>rt<"bottom"lip><"clear">'
+        });
+    });
+    
+    // Fallback initialization
+    setTimeout(function() {
+        // Leaderboard fallback
+        if (!$.fn.DataTable.isDataTable('#leaderboard')) {
+            $('#leaderboard').DataTable({
+                paging: true,
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                ordering: true,
+                responsive: true,
+                dom: '<"top"lf>rt<"bottom"ip><"clear">',
+                order: [[2, 'desc']]
+            });
+        }
+        
+        // Historical events fallback
+        $('.historical-events-table').not('.dataTable').each(function() {
+            $(this).DataTable({
+                scrollY: '300px',
+                scrollCollapse: true,
+                paging: false,
+                ordering: true,
+                responsive: true,
+                dom: '<"top"f>rt<"bottom"lip><"clear">'
+            });
+        });
+    }, 500);
+});
+</script>
 {% endblock %}
