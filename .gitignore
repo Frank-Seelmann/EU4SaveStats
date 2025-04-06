@@ -39,3 +39,5 @@ yarn.lock         # Yarn lock file (if applicable)
 *.patch           # Patch files
 *.diff            # Diff files
 .env              # Duh
+*/.env
+**/.env
