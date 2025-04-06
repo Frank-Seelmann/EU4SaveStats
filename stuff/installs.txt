@@ -1,8 +1,0 @@
-Rust w/ eu4save:
-
-cargo install eu4save
-
-
-Paperman
-Download node, then:
-npx paperman schweedn.eu4
