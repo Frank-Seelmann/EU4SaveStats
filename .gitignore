@@ -11,7 +11,6 @@ __pycache__/      # Python bytecode cache
 dist/             # Python distribution folders
 build/            # Python build output
 venv/             # Python virtual environment
-.env              # Environment variables (often contains sensitive data)
 
 # IDE and editor files
 .vscode/          # Visual Studio Code settings
