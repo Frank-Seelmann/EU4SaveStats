@@ -6,6 +6,7 @@ target
 # Python-specific files
 **/__pycache__/      # Python bytecode cache
 **/.py[cod]         # Python compiled files
+**/.pyc
 *.so              # Shared object files (Python extensions)
 *.egg-info/       # Python package metadata
 dist/             # Python distribution folders
