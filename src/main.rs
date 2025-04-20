@@ -171,3 +171,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     run(file_path, user_id).await
 }
+
+#[tokio::test]
+async fn test_run_with_real_file() {
+    // Use the real save file
+    let path = "samples/mp_Byzantium1527_11_02.eu4";
+
+    // Clean up any previous test runs
+    let _ = std::fs::remove_dir_all("processed");
+
+    // Run the processor
+    let result = run(path, 1).await;
+    assert!(result.is_ok(), "Failed to process real save file: {:?}", result.err());
+
+    // Verify output was created by checking for any JSON file with the expected prefix
+    let processed_dir = Path::new("processed");
+    let output_files: Vec<_> = std::fs::read_dir(processed_dir)
+        .unwrap()
+        .filter_map(|entry| {
+            let entry = entry.unwrap();
+            let file_name = entry.file_name().into_string().unwrap();
+            if file_name.starts_with("mp_Byzantium1527_11_02_") && file_name.ends_with(".json") {
+                Some(entry.path())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    assert!(!output_files.is_empty(), "No JSON output file found in processed directory");
+
+    // Verify the JSON content is valid
+    let json_path = &output_files[0];
+    let json_content = std::fs::read_to_string(json_path).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json_content).unwrap();
+
+    // Basic content validation
+    assert!(parsed["original_filename"].as_str().unwrap().contains("Byzantium"));
+    assert!(parsed["processed_data"].is_array());
+    assert!(parsed["processed_data"].as_array().unwrap().len() > 0);
+
+    // Clean up
+    let _ = std::fs::remove_dir_all("processed");
+}

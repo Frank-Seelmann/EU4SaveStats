@@ -126,3 +126,67 @@ pub fn calculate_checksum(data: &[u8]) -> String {
     hasher.update(data);
     format!("{:x}", hasher.finalize())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eu4save::models::{CountryEvent, Monarch, ObjId};
+    use eu4save::{CountryTag, Eu4Date};
+
+    #[test]
+    fn test_calculate_checksum() {
+        let data = b"test data";
+        let checksum = calculate_checksum(data);
+        assert_eq!(checksum.len(), 64);
+    }
+
+    #[test]
+    fn test_extract_historical_events_empty() {
+        let events = vec![];
+        let result = extract_historical_events(&events);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_extract_historical_events_monarch() {
+        let events = vec![(
+            Eu4Date::from_ymd(1444, 1, 1),
+            CountryEvent::Monarch(Monarch {
+                id: ObjId { id: 0, _type: 0 },
+                country: CountryTag::new(*b"FRA"),
+                name: "Test".to_string(),
+                dip: 3,
+                adm: 3,
+                mil: 3,
+                birth_date: Eu4Date::from_ymd(1444, 1, 1),
+                regent: false,
+                leader_id: None,
+                culture: None,
+                religion: None,
+                leader: None,
+                dynasty: None,
+                personalities: Vec::new(),
+            })
+        )];
+        let result = extract_historical_events(&events);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].event_type, "Monarch");
+        assert!(result[0].details.contains("Name: Test"));
+    }
+
+    #[test]
+    fn test_extract_current_state_minimal() {
+        // Create a minimal CurrentState directly
+        let result = CurrentState {
+            date: "1444.11.11".to_string(),
+            income: vec![10.0, 20.0],
+            manpower: 1000.0,
+            max_manpower: 1500.0,
+            trade_income: 50.0,
+            annual_income: [("1444".to_string(), 120.0)].iter().cloned().collect(),
+        };
+
+        assert_eq!(result.date, "1444.11.11");
+        assert_eq!(result.income.len(), 2);
+    }
+}

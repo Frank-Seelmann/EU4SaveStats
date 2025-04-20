@@ -19,3 +19,24 @@ pub struct HistoricalEvent {
 }
 
 pub mod parser;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_current_state_serialization() {
+        let state = CurrentState {
+            date: "1444.11.11".to_string(),
+            income: vec![10.5, 20.3],
+            manpower: 1000.0,
+            max_manpower: 1500.0,
+            trade_income: 50.0,
+            annual_income: [("1444".to_string(), 120.0)].iter().cloned().collect(),
+        };
+
+        let serialized = serde_json::to_string(&state).unwrap();
+        assert!(serialized.contains("\"date\":\"1444.11.11\""));
+        assert!(serialized.contains("\"manpower\":1000.0"));
+    }
+}
