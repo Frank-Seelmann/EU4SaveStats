@@ -4,7 +4,8 @@ FROM rust:latest AS builder
 # Install dependencies for cross-compilation
 RUN apt update && apt install -y \
     gcc-x86-64-linux-gnu \
-    libc6-dev-amd64-cross
+    libc6-dev-amd64-cross && \
+    rm -rf /var/lib/apt/lists/*
 
 # Add the Linux target for Rust
 RUN rustup target add x86_64-unknown-linux-gnu
