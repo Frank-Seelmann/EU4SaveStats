@@ -1,0 +1,32 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build binary (replace with your actual build steps)
+      run: |
+        # Example for Rust (adjust as needed)
+        cargo build --release
+        mv target/release/eu4_parser ./eu4_parser
+
+    - name: Install sshpass
+      run: sudo apt-get install -y sshpass
+
+    - name: Deploy to EC2
+      run: |
+        # Copy binary
+        sshpass -p "${{ secrets.EC2_PASSWORD }}" scp -o StrictHostKeyChecking=no ./eu4_parser ${{ secrets.EC2_USER }}@${{ secrets.EC2_INSTANCE_IP }}:~/eu4_parser
+        
+        # Set executable permissions
+        sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_INSTANCE_IP }} "chmod +x ~/eu4_parser"
+        
+        # Optional: Restart service if needed
+        # sshpass -p "${{ secrets.EC2_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_INSTANCE_IP }} "sudo systemctl restart your_service"
