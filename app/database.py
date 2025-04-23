@@ -504,3 +504,91 @@ class Database:
         finally:
             cursor.close()
             conn.close()
+
+    def get_friends_list(self, user_id: int) -> List[Dict[str, Any]]:
+        """Get accepted friends list (both directions)"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("""
+                (SELECT u.id, u.username 
+                FROM user_friends uf
+                JOIN users u ON uf.friend_id = u.id
+                WHERE uf.user_id = %s AND uf.status = 'accepted')
+                UNION
+                (SELECT u.id, u.username 
+                FROM user_friends uf
+                JOIN users u ON uf.user_id = u.id
+                WHERE uf.friend_id = %s AND uf.status = 'accepted')
+            """, (user_id, user_id))
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_pending_requests(self, user_id: int) -> List[Dict[str, Any]]:
+        """Get pending friend requests where user is the recipient"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("""
+                SELECT u.id, u.username 
+                FROM user_friends uf
+                JOIN users u ON uf.user_id = u.id
+                WHERE uf.friend_id = %s AND uf.status = 'pending'
+            """, (user_id,))
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def create_friend_request(self, user_id: int, friend_id: int) -> bool:
+        """Create a new friend request"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            # Check if relationship already exists
+            cursor.execute("""
+                SELECT 1 FROM user_friends 
+                WHERE (user_id = %s AND friend_id = %s)
+                OR (user_id = %s AND friend_id = %s)
+            """, (user_id, friend_id, friend_id, user_id))
+            
+            if cursor.fetchone():
+                return False
+            
+            # Create new request
+            cursor.execute("""
+                INSERT INTO user_friends (user_id, friend_id, status)
+                VALUES (%s, %s, 'pending')
+            """, (user_id, friend_id))
+            
+            conn.commit()
+            return True
+        except mysql.connector.Error as err:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def accept_friend_request(self, user_id: int, friend_id: int) -> bool:
+        """Accept a pending friend request"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE user_friends 
+                SET status = 'accepted'
+                WHERE user_id = %s AND friend_id = %s AND status = 'pending'
+            """, (friend_id, user_id))
+            
+            affected = cursor.rowcount
+            conn.commit()
+            return affected > 0
+        except mysql.connector.Error as err:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
