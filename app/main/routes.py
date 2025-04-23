@@ -16,6 +16,8 @@ main_bp = Blueprint('main', __name__)
 def file_details(checksum):
     """Show details of a processed file"""
     db = Database()
+    
+    # Get basic file info from database
     file_data = db.get_file_by_checksum(checksum, current_user.id)
     
     if not file_data:
@@ -23,32 +25,55 @@ def file_details(checksum):
         return redirect(url_for('main.index'))
     
     try:
-        with open(file_data['json_path'], 'r', encoding='utf-8') as f:
-            processed_data = json.load(f)
+        # Get all country data from database
+        countries = []
+        
+        # First get all unique country tags for this file
+        # We'll get them from current_state table since it should have all countries
+        conn = db._get_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            cursor.execute("""
+                SELECT DISTINCT country_tag 
+                FROM current_state 
+                WHERE file_checksum = %s
+            """, (checksum,))
+            country_tags = [row['country_tag'] for row in cursor.fetchall()]
             
-        # Ensure timestamp exists
+            # Get data for each country
+            for tag in country_tags:
+                country = {
+                    'country_tag': tag,
+                    'current_state': db.get_current_state(checksum, tag),
+                    'annual_income': db.get_annual_income(checksum, tag),
+                    'historical_events': db.get_historical_events(checksum, tag)
+                }
+                countries.append(country)
+                
+        finally:
+            cursor.close()
+            conn.close()
+            
+        # Preserve the JSON file by writing the data we just fetched
+        try:
+            json_data = {
+                'file_checksum': checksum,
+                'original_filename': file_data['original_filename'],
+                'processed_data': countries,
+                'timestamp': file_data.get('processed_at', '')
+            }
+            
+            with open(file_data['json_path'], 'w', encoding='utf-8') as f:
+                json.dump(json_data, f, indent=2)
+        except Exception as e:
+            current_app.logger.error(f"Failed to update JSON file: {str(e)}")
+            # Continue even if JSON update fails
+            
+        # Ensure timestamp exists for template
         if 'processed_at' in file_data and 'timestamp' not in file_data:
             file_data['timestamp'] = file_data['processed_at']
             
-        # Get all country data from database
-        countries = []
-        country_tags = {c['country_tag'] for c in processed_data.get('processed_data', [])}
-        
-        for tag in country_tags:
-            country = {
-                'country_tag': tag,
-                'current_state': db.get_current_state(checksum, tag),
-                'annual_income': db.get_annual_income(checksum, tag),
-                'historical_events': db.get_historical_events(checksum, tag)
-            }
-            countries.append(country)
-            
-    except FileNotFoundError:
-        flash('Processed data file not found', 'error')
-        return redirect(url_for('main.index'))
-    except json.JSONDecodeError:
-        flash('Invalid data format', 'error')
-        return redirect(url_for('main.index'))
     except Exception as e:
         flash(f'Error loading file data: {str(e)}', 'error')
         return redirect(url_for('main.index'))
