@@ -87,13 +87,18 @@ def file_details(checksum):
 def index():
     db = Database()
     files = db.get_user_files(current_user.id)
+    shared_files = db.get_shared_files(current_user.id)
     
     # Ensure each file has a timestamp field
     for file in files:
         if 'processed_at' in file and 'timestamp' not in file:
             file['timestamp'] = file['processed_at']
     
-    return render_template('main/index.html', files=files)
+    for file in shared_files:
+        if 'processed_at' in file and 'timestamp' not in file:
+            file['timestamp'] = file['processed_at']
+    
+    return render_template('main/index.html', files=files, shared_files=shared_files)
 
 @main_bp.route('/upload', methods=['POST'])
 @login_required
@@ -119,6 +124,14 @@ def upload_file():
             # Process file
             result = FileService.process_file(temp_path, current_user.id)
             
+            # Check if user wants to share with friends
+            share_with_friends = request.form.get('share_with_friends') == 'on'
+            if share_with_friends:
+                db = Database()
+                file_data = db.get_file_by_checksum(result['checksum'], current_user.id)
+                if file_data:
+                    db.share_file_with_all_friends(file_data['id'], current_user.id)
+            
             # Clean up
             os.remove(temp_path)
             
@@ -126,7 +139,6 @@ def upload_file():
             return redirect(url_for('main.file_details', checksum=result['checksum']))
         
         except Exception as e:
-            # Get full traceback as a string
             error_traceback = traceback.format_exc()
             flash(f'Processing failed: {str(e)}\n\nTraceback:\n{error_traceback}', 'error')
             return redirect(url_for('main.index'))

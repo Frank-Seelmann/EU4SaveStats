@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app.database import Database
 
-friends_bp = Blueprint('friends', __name__, template_folder='templates')
+friends_bp = Blueprint('friends_bp', __name__, template_folder='templates')
 db = Database()
 
 @friends_bp.route('/friends')

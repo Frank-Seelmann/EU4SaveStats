@@ -19,17 +19,17 @@ def create_app():
     # Initialize database
     Database()  # This will create tables if they don't exist
 
-    # Register blueprints
-    from .auth.routes import auth_bp
-    from .main.routes import main_bp
-    
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(main_bp)
-
+    # Create necessary directories
     os.makedirs(os.path.join(app.instance_path, 'temp'), exist_ok=True)
     os.makedirs('processed', exist_ok=True)
 
-    from app.friends.routes import friends_bp
+    # Register blueprints - IMPORTANT: Do this after other initializations
+    from .auth.routes import auth_bp
+    from .main.routes import main_bp
+    from .friends.routes import friends_bp
+    
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(main_bp)
     app.register_blueprint(friends_bp)
 
     return app

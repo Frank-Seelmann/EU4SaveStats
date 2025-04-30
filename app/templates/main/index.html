@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Uploaded Files</h2>
+<h2>My Uploaded Files</h2>
 
 {% if files %}
 <table class="table">
@@ -9,6 +9,7 @@
         <tr>
             <th>Filename</th>
             <th>Upload Date</th>
+            <th>Owner</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -17,6 +18,7 @@
         <tr>
             <td>{{ file.original_filename }}</td>
             <td>{{ file.timestamp if file.timestamp else file.processed_at|datetimeformat }}</td>
+            <td>You</td>
             <td>
                 <a href="{{ url_for('main.file_details', checksum=file.checksum) }}" 
                     class="btn btn-sm btn-primary">
@@ -30,13 +32,48 @@
 {% else %}
 <div class="alert alert-info">No files uploaded yet.</div>
 {% endif %}
-    
-    <h2 class="mt-4">Upload a New Save File</h2>
-    <form action="{{ url_for('main.upload_file') }}" method="post" enctype="multipart/form-data">
-        <div class="input-group">
-            <input type="file" name="file" class="form-control" accept=".eu4" required>
-            <button type="submit" class="btn btn-primary">Upload</button>
-        </div>
-    </form>
-</div>
+
+<h2 class="mt-4">Files Shared With Me</h2>
+
+{% if shared_files %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>Filename</th>
+            <th>Upload Date</th>
+            <th>Owner</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for file in shared_files %}
+        <tr>
+            <td>{{ file.original_filename }}</td>
+            <td>{{ file.timestamp if file.timestamp else file.processed_at|datetimeformat }}</td>
+            <td>{{ file.owner_name }}</td>
+            <td>
+                <a href="{{ url_for('main.file_details', checksum=file.checksum) }}" 
+                    class="btn btn-sm btn-primary">
+                    View
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No files have been shared with you yet.</div>
+{% endif %}
+
+<h2 class="mt-4">Upload a New Save File</h2>
+<form action="{{ url_for('main.upload_file') }}" method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+        <input type="file" name="file" class="form-control" accept=".eu4" required>
+    </div>
+    <div class="mb-3 form-check">
+        <input type="checkbox" name="share_with_friends" id="share_with_friends" class="form-check-input">
+        <label for="share_with_friends" class="form-check-label">Automatically share with all friends</label>
+    </div>
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
 {% endblock %}

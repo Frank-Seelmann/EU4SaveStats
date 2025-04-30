@@ -371,24 +371,6 @@ class Database:
             cursor.close()
             conn.close()
 
-    def get_pending_requests(self, user_id: int) -> List[Dict[str, Any]]:
-        """Get pending friend requests for a user"""
-        conn = self._get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        try:
-            cursor.execute(
-                """SELECT uf.id, u.username, u.email 
-                   FROM user_friends uf
-                   JOIN users u ON uf.user_id = u.id
-                   WHERE uf.friend_id = %s AND uf.status = 'pending'""",
-                (user_id,)
-            )
-            return cursor.fetchall()
-        finally:
-            cursor.close()
-            conn.close()
-
     def share_file(self, file_id: int, user_id: int) -> None:
         """Share a file with another user"""
         conn = self._get_connection()
@@ -415,17 +397,16 @@ class Database:
         cursor = conn.cursor(dictionary=True)
         
         try:
-            cursor.execute(
-                """SELECT uf.*, u.username as owner_name
-                   FROM uploaded_files uf
-                   JOIN user_file_permissions ufp ON uf.id = ufp.file_id
-                   JOIN users u ON (
-                       SELECT user_id FROM user_file_permissions 
-                       WHERE file_id = uf.id AND permission_type = 'owner'
-                   ) = u.id
-                   WHERE ufp.user_id = %s AND ufp.permission_type = 'shared'""",
-                (user_id,)
-            )
+            cursor.execute("""
+                SELECT uf.*, u.username as owner_name
+                FROM uploaded_files uf
+                JOIN user_file_permissions ufp ON uf.id = ufp.file_id
+                JOIN users u ON uf.user_id = u.id
+                WHERE ufp.user_id = %s 
+                AND ufp.permission_type = 'shared'
+                AND uf.user_id != %s
+                ORDER BY uf.processed_at DESC
+            """, (user_id, user_id))
             return cursor.fetchall()
         finally:
             cursor.close()
@@ -587,6 +568,44 @@ class Database:
             conn.commit()
             return affected > 0
         except mysql.connector.Error as err:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def share_file_with_all_friends(self, file_id: int, owner_id: int) -> None:
+        """Share a file with all of the owner's friends"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Get all friend IDs
+            cursor.execute("""
+                SELECT friend_id FROM user_friends 
+                WHERE user_id = %s AND status = 'accepted'
+                UNION
+                SELECT user_id FROM user_friends 
+                WHERE friend_id = %s AND status = 'accepted'
+            """, (owner_id, owner_id))
+            
+            friend_ids = [row[0] for row in cursor.fetchall()]
+            
+            # Share with each friend
+            for friend_id in friend_ids:
+                try:
+                    cursor.execute("""
+                        INSERT INTO user_file_permissions 
+                        (file_id, user_id, permission_type) 
+                        VALUES (%s, %s, 'shared')
+                        ON DUPLICATE KEY UPDATE permission_type = 'shared'
+                    """, (file_id, friend_id))
+                except mysql.connector.Error as err:
+                    # Log but continue with other friends
+                    print(f"Error sharing with friend {friend_id}: {err}")
+                    
+            conn.commit()
+        except Exception as e:
             conn.rollback()
             raise
         finally:
