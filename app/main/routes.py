@@ -8,6 +8,11 @@ from app.database import Database
 import json
 import mysql.connector
 from mysql.connector import errorcode
+import io
+import base64
+import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgb
+import random
 
 main_bp = Blueprint('main', __name__)
 
@@ -23,13 +28,14 @@ def file_details(checksum):
     if not file_data:
         flash('File not found or you don\'t have permission to view it', 'error')
         return redirect(url_for('main.index'))
-    
+
+    plot_url = None
     try:
         # Get all country data from database
         countries = []
+        annual_income_data = {}  # For storing plot data
         
         # First get all unique country tags for this file
-        # We'll get them from current_state table since it should have all countries
         conn = db._get_connection()
         cursor = conn.cursor(dictionary=True)
         
@@ -51,10 +57,60 @@ def file_details(checksum):
                 }
                 countries.append(country)
                 
+                # Store annual income data for plotting
+                if country['annual_income']:
+                    annual_income_data[tag] = {
+                        'annual_income': country['annual_income']
+                    }
+
         finally:
             cursor.close()
             conn.close()
             
+        # Generate plot if we have annual income data
+        if annual_income_data:
+            plt.figure(figsize=(10, 6))
+            for country_tag, data in annual_income_data.items():
+                try:
+                    # Ensure we have valid data to plot
+                    if not data['annual_income']:
+                        continue
+                        
+                    years = []
+                    incomes = []
+                    for income in data['annual_income']:
+                        try:
+                            year = int(income['year']) if 'year' in income else None
+                            income_val = float(income['income']) if 'income' in income else None
+                            if year is not None and income_val is not None:
+                                years.append(year)
+                                incomes.append(income_val)
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    if years and incomes:
+                        color = get_country_color(country_tag)
+                        plt.plot(years, incomes, label=country_tag, color=(color[0]/255, color[1]/255, color[2]/255))
+                
+                except Exception as e:
+                    current_app.logger.error(f"Error plotting data for {country_tag}: {str(e)}")
+                    continue
+            
+            if plt.gca().has_data():  # Only save if we actually plotted something
+                plt.xlabel('Year')
+                plt.ylabel('Income')
+                plt.title('Annual Income by Country')
+                plt.legend()
+                plt.grid(True)
+                
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                buf.seek(0)
+                plot_url = base64.b64encode(buf.getvalue()).decode('utf8')
+                plt.close()
+            else:
+                plot_url = None
+
         # Preserve the JSON file by writing the data we just fetched
         try:
             json_data = {
@@ -80,7 +136,8 @@ def file_details(checksum):
     
     return render_template('main/file_details.html',
                          file_data=file_data,
-                         countries=countries)
+                         countries=countries,
+                         plot_url=plot_url)
 
 @main_bp.route('/')
 @login_required
@@ -185,6 +242,23 @@ def share_file(checksum):
         flash(f'Error sharing file: {str(e)}', 'error')
     
     return redirect(url_for('main.file_details', checksum=checksum))
+
+def parse_country_colors(file_path):
+    country_colors = {}
+    with open(file_path, 'r') as file:
+        for line in file:
+            if '=' in line:
+                tag, color = line.split('=')
+                tag = tag.strip()
+                color = tuple(map(int, color.strip().split()))
+                country_colors[tag] = color
+    return country_colors
+
+# Load country colors from the generated file
+COUNTRY_COLORS = parse_country_colors('country_colors.txt')
+
+def get_country_color(country_tag):
+    return COUNTRY_COLORS.get(country_tag, (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
 @main_bp.route('/test-console')
 def test_console():

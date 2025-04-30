@@ -100,12 +100,18 @@ pub async fn run(path: &str, user_id: i64) -> Result<(), Box<dyn Error>> {
                 let income_breakdown = save_query.country_income_breakdown(country_query);
                 println!("[DEBUG] Income breakdown: {:?}", income_breakdown);
 
+                let player_nation_events = nation_events
+                    .iter()
+                    .find(|x| x.initial.to_string() == country_tag || x.latest.to_string() == country_tag)
+                    .ok_or("Player nation events not found")?;
+
                 // Process current state
                 let current_state = parser::extract_current_state(
                     &save_query,
                     &country_tag,
                     &format!("{:?}", save.meta.date),
                     &income_breakdown,
+                    player_nation_events,
                 )?;
                 println!("[DEBUG] Current state extracted: {:?}", current_state);
 

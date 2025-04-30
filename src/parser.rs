@@ -20,6 +20,7 @@ pub fn extract_current_state(
     country_tag: &str,
     current_date: &str,
     income_breakdown: &eu4save::query::CountryIncomeLedger,
+    player_nation_events: &eu4save::query::NationEvents,
 ) -> Result<CurrentState, Box<dyn Error>> {
     println!("[EXTRACT] Extracting data for country: {}", country_tag);
     let country = query
@@ -34,17 +35,13 @@ pub fn extract_current_state(
 
     // Group income data by year and calculate annual income
     let mut annual_income = std::collections::BTreeMap::new();
-    let province_owners = query.province_owners();
-    let nation_events = query.nation_events(&province_owners);
+    let income_statistics = query.income_statistics_ledger(player_nation_events);
 
-    let nation_events_ref = nation_events.first().ok_or("No nation events found")?;
-    for point in query
-        .income_statistics_ledger(nation_events_ref)
-        .iter()
-        .filter(|point| point.tag.to_string() == country_tag)
-    {
-        let annual_value = point.value as f64 * 12.0;
-        annual_income.insert(point.year.to_string(), annual_value);
+    for point in income_statistics {
+        if point.tag.to_string() == country_tag {
+            let annual_value = point.value as f64 * 12.0;
+            annual_income.insert(point.year.to_string(), annual_value);
+        }
     }
 
     Ok(CurrentState {

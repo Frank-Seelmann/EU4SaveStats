@@ -69,6 +69,17 @@
         {% endif %}
     </div>
 
+    {% if plot_url %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2>Annual Income Plot</h2>
+        </div>
+        <div class="card-body">
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Annual Income Plot" class="img-fluid">
+        </div>
+    </div>
+    {% endif %}
+
     {% if countries %}
     <div class="card mb-4">
         <div class="card-header">
@@ -113,17 +124,6 @@
         </div>
     </div>
 
-    {% if plot_url %}
-    <div class="card mb-4">
-        <div class="card-header">
-            <h2>Annual Income Plot</h2>
-        </div>
-        <div class="card-body">
-            <img src="data:image/png;base64,{{ plot_url }}" alt="Annual Income Plot" class="img-fluid">
-        </div>
-    </div>
-    {% endif %}
-
     {% for country in countries %}
     <div class="country-section card">
         <div class="card-header">
@@ -152,28 +152,6 @@
                         </p>
                     </div>
                 </div>
-            </div>
-            {% endif %}
-            
-            {% if country.annual_income %}
-            <div class="table-responsive">
-                <h4>Annual Income</h4>
-                <table class="table table-striped annual-income-table">
-                    <thead>
-                        <tr>
-                            <th>Year</th>
-                            <th>Income</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for income in country.annual_income %}
-                        <tr>
-                            <td>{{ income.year if income.year is defined else income.get('year', 'N/A') }}</td>
-                            <td>{{ "%.2f"|format(income.income|float) if income.income is defined else "N/A" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
             </div>
             {% endif %}
             
