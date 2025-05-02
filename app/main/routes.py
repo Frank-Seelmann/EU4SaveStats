@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgb
 import random
 
+ALLOWED_EXTENSIONS = {'eu4'}
+
 main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/file/<string:checksum>')
@@ -26,7 +28,7 @@ def file_details(checksum):
     file_data = db.get_file_by_checksum(checksum, current_user.id)
     
     if not file_data:
-        flash('File not found or you don\'t have permission to view it', 'error')
+        flash('File not found or you don\'t have permission to view it', 'danger')
         return redirect(url_for('main.index'))
 
     plot_url = None
@@ -131,7 +133,7 @@ def file_details(checksum):
             file_data['timestamp'] = file_data['processed_at']
             
     except Exception as e:
-        flash(f'Error loading file data: {str(e)}', 'error')
+        flash(f'Error loading file data: {str(e)}', 'danger')
         return redirect(url_for('main.index'))
     
     return render_template('main/file_details.html',
@@ -161,14 +163,18 @@ def index():
 @login_required
 def upload_file():
     if 'file' not in request.files:
-        flash('No file selected', 'error')
+        flash('No file selected', 'danger')
         return redirect(url_for('main.index'))
     
     file = request.files['file']
     if file.filename == '':
-        flash('No file selected', 'error')
+        flash('No file selected', 'danger')
         return redirect(url_for('main.index'))
     
+    if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() == 'eu4'):
+        flash('Only .eu4 save files are allowed!', 'danger')
+        return redirect(url_for('main.index'))
+
     if file:
         try:
             # Save to temp location
@@ -197,7 +203,7 @@ def upload_file():
         
         except Exception as e:
             error_traceback = traceback.format_exc()
-            flash(f'Processing failed: {str(e)}\n\nTraceback:\n{error_traceback}', 'error')
+            flash(f'Processing failed: {str(e)}\n\nTraceback:\n{error_traceback}', 'danger')
             return redirect(url_for('main.index'))
         
 @main_bp.route('/share_file/<string:checksum>', methods=['POST'])
@@ -209,24 +215,24 @@ def share_file(checksum):
     # 1. Verify the file exists and belongs to current user
     file_data = db.get_file_by_checksum(checksum, current_user.id)
     if not file_data:
-        flash('File not found or you don\'t have permission to share it', 'error')
+        flash('File not found or you don\'t have permission to share it', 'danger')
         return redirect(url_for('main.index'))
     
     # 2. Get friend username from form
     friend_username = request.form.get('friend_username')
     if not friend_username:
-        flash('Please enter a username to share with', 'error')
+        flash('Please enter a username to share with', 'danger')
         return redirect(url_for('main.file_details', checksum=checksum))
     
     # 3. Look up friend user
     friend = db.get_user_by_username(friend_username)
     if not friend:
-        flash('User not found', 'error')
+        flash('User not found', 'danger')
         return redirect(url_for('main.file_details', checksum=checksum))
     
     # 4. Check if trying to share with self
     if friend['id'] == current_user.id:
-        flash('You cannot share a file with yourself', 'error')
+        flash('You cannot share a file with yourself', 'danger')
         return redirect(url_for('main.file_details', checksum=checksum))
     
     try:
@@ -237,9 +243,9 @@ def share_file(checksum):
         if err.errno == errorcode.ER_DUP_ENTRY:
             flash(f'This file is already shared with {friend_username}', 'warning')
         else:
-            flash(f'Error sharing file: {str(err)}', 'error')
+            flash(f'Error sharing file: {str(err)}', 'danger')
     except Exception as e:
-        flash(f'Error sharing file: {str(e)}', 'error')
+        flash(f'Error sharing file: {str(e)}', 'danger')
     
     return redirect(url_for('main.file_details', checksum=checksum))
 
