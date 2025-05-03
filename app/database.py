@@ -428,14 +428,16 @@ class Database:
             conn.close()
 
     def get_file_by_checksum(self, checksum: str, user_id: int) -> Optional[dict]:
-        """Get file details by checksum and user ID"""
+        """Get file details by checksum and user ID (either owner or shared)"""
         conn = self._get_connection()
         cursor = conn.cursor(dictionary=True)
         try:
             cursor.execute('''
-                SELECT * FROM uploaded_files 
-                WHERE checksum = %s AND user_id = %s
-            ''', (checksum, user_id))
+                SELECT uf.* FROM uploaded_files uf
+                LEFT JOIN user_file_permissions ufp ON uf.id = ufp.file_id
+                WHERE uf.checksum = %s
+                AND (uf.user_id = %s OR ufp.user_id = %s)
+            ''', (checksum, user_id, user_id))
             return cursor.fetchone()
         finally:
             cursor.close()
