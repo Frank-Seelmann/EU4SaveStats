@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>{{ topic.title }}</h1>
+    <p class="text-muted">Created by {{ topic.username }} on {{ topic.created_at|datetimeformat }}</p>
+    
+    <div class="card mb-3">
+        <div class="card-body">
+            <p class="card-text">{{ topic.content }}</p>
+        </div>
+    </div>
+    
+    <h3>Replies</h3>
+    
+    {% if posts %}
+    <div class="list-group mb-3">
+        {% for post in posts %}
+        <div class="list-group-item">
+            <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1">{{ post.username }}</h6>
+                <small>{{ post.created_at|datetimeformat }}</small>
+            </div>
+            <p class="mb-1">{{ post.content }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">No replies yet. Be the first to reply!</div>
+    {% endif %}
+    
+    <h4>Add a Reply</h4>
+    <form method="POST" action="{{ url_for('forum.add_post', topic_id=topic.id) }}">
+        <div class="mb-3">
+            <textarea class="form-control" name="content" rows="3" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Post Reply</button>
+    </form>
+</div>
+{% endblock %}

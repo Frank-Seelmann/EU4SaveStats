@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Forum</h1>
+    
+    <div class="mb-3">
+        <a href="{{ url_for('forum.create_topic') }}" class="btn btn-primary">Create New Topic</a>
+    </div>
+    
+    {% if topics %}
+    <div class="list-group">
+        {% for topic in topics %}
+        <a href="{{ url_for('forum.view_topic', topic_id=topic.id) }}" class="list-group-item list-group-item-action">
+            <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">{{ topic.title }}</h5>
+                <small>{{ topic.created_at|datetimeformat }}</small>
+            </div>
+            <p class="mb-1">{{ topic.content[:100] }}{% if topic.content|length > 100 %}...{% endif %}</p>
+            <small>Posted by {{ topic.username }}</small>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">No topics yet. Be the first to create one!</div>
+    {% endif %}
+</div>
+{% endblock %}

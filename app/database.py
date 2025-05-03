@@ -114,7 +114,28 @@ class Database:
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     UNIQUE KEY unique_permission (file_id, user_id)
                 )
-            """, "user_file_permissions table created")
+            """, "user_file_permissions table created"),
+            'topics': ("""
+                CREATE TABLE IF NOT EXISTS topics (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    user_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """, "topics table created"),
+            'posts': ("""
+                CREATE TABLE IF NOT EXISTS posts (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    user_id INT NOT NULL,
+                    topic_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+                )
+            """, "posts table created")
         }
 
         conn = self._get_connection()
@@ -610,6 +631,163 @@ class Database:
         except Exception as e:
             conn.rollback()
             raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def delete_file(self, file_id: int, user_id: int) -> bool:
+        """Delete a file and all its associated data if user is owner"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Verify user is the owner
+            cursor.execute("""
+                SELECT 1 FROM uploaded_files
+                WHERE id = %s AND user_id = %s
+            """, (file_id, user_id))
+
+            if not cursor.fetchone():
+                return False
+
+            # Get checksum for cascading deletes
+            cursor.execute("""
+                SELECT checksum FROM uploaded_files WHERE id = %s
+            """, (file_id,))
+            checksum = cursor.fetchone()[0]
+
+            # Start transaction only if not already in one
+            if not conn.in_transaction:
+                conn.start_transaction()
+
+            # Delete from shared permissions first
+            cursor.execute("""
+                DELETE FROM user_file_permissions
+                WHERE file_id = %s
+            """, (file_id,))
+
+            # Delete from current_state
+            cursor.execute("""
+                DELETE FROM current_state
+                WHERE file_checksum = %s
+            """, (checksum,))
+
+            # Delete from historical_events
+            cursor.execute("""
+                DELETE FROM historical_events
+                WHERE file_checksum = %s
+            """, (checksum,))
+
+            # Delete from annual_income
+            cursor.execute("""
+                DELETE FROM annual_income
+                WHERE file_checksum = %s
+            """, (checksum,))
+
+            # Finally delete the file record
+            cursor.execute("""
+                DELETE FROM uploaded_files
+                WHERE id = %s
+            """, (file_id,))
+
+            conn.commit()
+            return True
+
+        except Exception as e:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def create_topic(self, title: str, content: str, user_id: int) -> int:
+        """Create a new forum topic and return topic ID"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                "INSERT INTO topics (title, content, user_id) VALUES (%s, %s, %s)",
+                (title, content, user_id)
+            )
+            topic_id = cursor.lastrowid
+            conn.commit()
+            return topic_id
+        except mysql.connector.Error as err:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def add_post(self, content: str, user_id: int, topic_id: int) -> int:
+        """Add a post to a topic and return post ID"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                "INSERT INTO posts (content, user_id, topic_id) VALUES (%s, %s, %s)",
+                (content, user_id, topic_id)
+            )
+            post_id = cursor.lastrowid
+            conn.commit()
+            return post_id
+        except mysql.connector.Error as err:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_all_topics(self) -> List[Dict[str, Any]]:
+        """Get all forum topics with author info"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT t.*, u.username
+                FROM topics t
+                JOIN users u ON t.user_id = u.id
+                ORDER BY t.created_at DESC
+            """)
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_topic_by_id(self, topic_id: int) -> Optional[Dict[str, Any]]:
+        """Get a topic by ID with author info"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT t.*, u.username
+                FROM topics t
+                JOIN users u ON t.user_id = u.id
+                WHERE t.id = %s
+            """, (topic_id,))
+            return cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_posts_for_topic(self, topic_id: int) -> List[Dict[str, Any]]:
+        """Get all posts for a topic with author info"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT p.*, u.username
+                FROM posts p
+                JOIN users u ON p.user_id = u.id
+                WHERE p.topic_id = %s
+                ORDER BY p.created_at ASC
+            """, (topic_id,))
+            return cursor.fetchall()
         finally:
             cursor.close()
             conn.close()

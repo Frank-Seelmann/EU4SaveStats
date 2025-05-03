@@ -27,10 +27,12 @@ def create_app():
     from .auth.routes import auth_bp
     from .main.routes import main_bp
     from .friends.routes import friends_bp
+    from app.forum import routes as forum_routes
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(friends_bp)
+    app.register_blueprint(forum_routes.forum_bp, url_prefix='/forum')
 
     return app
 

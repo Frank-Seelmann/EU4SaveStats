@@ -266,6 +266,41 @@ COUNTRY_COLORS = parse_country_colors('country_colors.txt')
 def get_country_color(country_tag):
     return COUNTRY_COLORS.get(country_tag, (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
+@main_bp.route('/delete_file/<string:checksum>', methods=['POST'])
+@login_required
+def delete_file(checksum):
+    """Delete a file and all its associated data"""
+    db = Database()
+
+    try:
+        # Get file info to verify ownership
+        file_data = db.get_file_by_checksum(checksum, current_user.id)
+
+        if not file_data or file_data['user_id'] != current_user.id:
+            flash('File not found or you don\'t have permission to delete it', 'danger')
+            return redirect(url_for('main.index'))
+
+        # Attempt to delete the file
+        success = db.delete_file(file_data['id'], current_user.id)
+
+        # Also delete the local JSON file, if it exists
+        try:
+            if success and os.path.exists(file_data['json_path']):
+                os.remove(file_data['json_path'])
+        except Exception as e:
+            current_app.logger.error(f"Error deleting JSON file: {str(e)}")
+
+        if success:
+            flash('File deleted successfully', 'success')
+        else:
+            flash('Failed to delete file', 'danger')
+
+    except Exception as e:
+        flash(f'Error deleting file: {str(e)}', 'danger')
+        current_app.logger.error(f"Error deleting file {checksum}: {str(e)}")
+
+    return redirect(url_for('main.index'))
+
 @main_bp.route('/test-console')
 def test_console():
     """Route to test console output"""
