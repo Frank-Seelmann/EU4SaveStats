@@ -2,39 +2,87 @@
 
 {% block content %}
 <div class="container">
-    <h1>{{ topic.title }}</h1>
-    <p class="text-muted">Created by {{ topic.username }} on {{ topic.created_at|datetimeformat }}</p>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>{{ topic.title }}</h1>
+        {% if topic.user_id == current_user.id %}
+        <form method="POST" action="{{ url_for('forum.delete_topic', topic_id=topic.id) }}">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this topic and all its replies?')">
+                <i class="fas fa-trash-alt"></i> Delete Topic
+            </button>
+        </form>
+        {% endif %}
+    </div>
     
-    <div class="card mb-3">
+    <div class="card mb-4">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="text-muted">Posted by {{ topic.username }}</span>
+                <small class="text-muted">{{ topic.created_at|datetimeformat }}</small>
+            </div>
+        </div>
         <div class="card-body">
             <p class="card-text">{{ topic.content }}</p>
         </div>
     </div>
     
-    <h3>Replies</h3>
+    <h3 class="mb-3">Replies</h3>
     
     {% if posts %}
-    <div class="list-group mb-3">
+    <div class="list-group mb-4">
         {% for post in posts %}
         <div class="list-group-item">
-            <div class="d-flex w-100 justify-content-between">
-                <h6 class="mb-1">{{ post.username }}</h6>
-                <small>{{ post.created_at|datetimeformat }}</small>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="flex-grow-1">
+                    <h6 class="mb-1">{{ post.username }}</h6>
+                    <p class="mb-1">{{ post.content }}</p>
+                </div>
+                <div class="d-flex flex-column align-items-end">
+                    <small class="text-muted mb-2">{{ post.created_at|datetimeformat }}</small>
+                    {% if post.user_id == current_user.id %}
+                    <form method="POST" action="{{ url_for('forum.delete_post', post_id=post.id) }}">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this post?')">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
             </div>
-            <p class="mb-1">{{ post.content }}</p>
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <div class="alert alert-info">No replies yet. Be the first to reply!</div>
+    <div class="alert alert-info mb-4">No replies yet. Be the first to reply!</div>
     {% endif %}
     
-    <h4>Add a Reply</h4>
-    <form method="POST" action="{{ url_for('forum.add_post', topic_id=topic.id) }}">
-        <div class="mb-3">
-            <textarea class="form-control" name="content" rows="3" required></textarea>
+    <div class="card">
+        <div class="card-header">
+            <h4 class="mb-0">Add a Reply</h4>
         </div>
-        <button type="submit" class="btn btn-primary">Post Reply</button>
-    </form>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('forum.add_post', topic_id=topic.id) }}">
+                <div class="mb-3">
+                    <textarea class="form-control" name="content" rows="3" required placeholder="Write your reply..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Post Reply</button>
+            </form>
+        </div>
+    </div>
 </div>
+
+<style>
+    .list-group-item {
+        position: relative;
+        padding: 1rem;
+    }
+    .list-group-item .btn-danger {
+        position: relative;
+        z-index: 1;
+    }
+    .card-header {
+        background-color: #f8f9fa;
+    }
+    .card-text {
+        white-space: pre-wrap;
+    }
+</style>
 {% endblock %}

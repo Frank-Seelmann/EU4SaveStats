@@ -791,3 +791,78 @@ class Database:
         finally:
             cursor.close()
             conn.close()
+
+    def delete_topic(self, topic_id: int, user_id: int) -> bool:
+        """Delete a topic if the user is the author"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Verify user is the author
+            cursor.execute(
+                "SELECT 1 FROM topics WHERE id = %s AND user_id = %s",
+                (topic_id, user_id)
+            )
+
+            if not cursor.fetchone():
+                return False
+
+            # Delete the topic (posts will be deleted automatically due to ON DELETE CASCADE)
+            cursor.execute(
+                "DELETE FROM topics WHERE id = %s",
+                (topic_id,)
+            )
+
+            conn.commit()
+            return True
+        except mysql.connector.Error as err:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def delete_post(self, post_id: int, user_id: int) -> bool:
+        """Delete a post if the user is the author"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Verify user is the author
+            cursor.execute(
+                "SELECT 1 FROM posts WHERE id = %s AND user_id = %s",
+                (post_id, user_id)
+            )
+
+            if not cursor.fetchone():
+                return False
+
+            # Delete the post
+            cursor.execute(
+                "DELETE FROM posts WHERE id = %s",
+                (post_id,)
+            )
+
+            conn.commit()
+            return True
+        except mysql.connector.Error as err:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_post_topic(self, post_id: int) -> Optional[Dict[str, Any]]:
+        """Get the topic ID for a post"""
+        conn = self._get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute(
+                "SELECT topic_id FROM posts WHERE id = %s",
+                (post_id,)
+            )
+            return cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()

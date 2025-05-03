@@ -50,3 +50,36 @@ def add_post(topic_id):
     db.add_post(content, current_user.id, topic_id)
     flash('Post added successfully!', 'success')
     return redirect(url_for('forum.view_topic', topic_id=topic_id))
+
+@forum_bp.route('/forum/topic/<int:topic_id>/delete', methods=['POST'])
+@login_required
+def delete_topic(topic_id):
+    db = Database()
+    success = db.delete_topic(topic_id, current_user.id)
+
+    if success:
+        flash('Topic deleted successfully', 'success')
+    else:
+        flash('You can only delete topics you created', 'danger')
+
+    return redirect(url_for('forum.forum'))
+
+@forum_bp.route('/forum/post/<int:post_id>/delete', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    db = Database()
+
+    # First get the topic_id for redirection
+    topic = db.get_post_topic(post_id)
+    if not topic:
+        flash('Post not found', 'danger')
+        return redirect(url_for('forum.forum'))
+
+    success = db.delete_post(post_id, current_user.id)
+
+    if success:
+        flash('Post deleted successfully', 'success')
+    else:
+        flash('You can only delete posts you created', 'danger')
+
+    return redirect(url_for('forum.view_topic', topic_id=topic['topic_id']))
