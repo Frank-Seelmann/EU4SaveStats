@@ -202,8 +202,7 @@ def upload_file():
             return redirect(url_for('main.file_details', checksum=result['checksum']))
         
         except Exception as e:
-            error_traceback = traceback.format_exc()
-            flash(f'Processing failed: {str(e)}\n\nTraceback:\n{error_traceback}', 'danger')
+            flash(f'{str(e)}', 'danger')
             return redirect(url_for('main.index'))
         
 @main_bp.route('/share_file/<string:checksum>', methods=['POST'])

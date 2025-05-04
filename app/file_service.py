@@ -52,13 +52,33 @@ class FileService:
             s3_key = s3.upload_file(file_path, user_id)
 
             # 2. Process file with Rust binary
-            result = subprocess.run(
-                [rust_binary, input_file, str(user_id)],
-                cwd=project_root,
-                check=True,
-                capture_output=True,
-                text=True
-            )
+            try:
+                result = subprocess.run(
+                    [rust_binary, input_file, str(user_id)],
+                    cwd=project_root,
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+            except subprocess.CalledProcessError as e:
+                # Extract and clean up the error message
+                error_msg = (e.stderr.strip() if e.stderr else "No error message from parser")
+                
+                # Create a clean error message
+                clean_error = (
+                    "⚠️ File Processing Failed ⚠️\n"
+                    f"Error: {error_msg}\n\n"
+                    "Possible solutions:\n"
+                    "- Ensure the file is uncompressed\n"
+                    "- Use a non-Ironman save file\n"
+                    "- Verify the file is a valid EU4 save\n\n"
+                    "Technical details available in server logs"
+                )
+                
+                user_error = RuntimeError(clean_error)
+                # Attach the full error as an attribute
+                user_error.full_error = str(e)
+                raise user_error from None
 
             # 3. Find the generated JSON file
             json_files = [
@@ -66,8 +86,8 @@ class FileService:
                 if f.endswith('.json') and f.startswith(Path(file_path).stem)
             ]
             if not json_files:
-                raise RuntimeError("No output JSON file found")
-            
+                raise RuntimeError("No output JSON file was generated. The parser may have failed silently.")
+
             json_files.sort(key=lambda f: os.path.getmtime(os.path.join(processed_dir, f)))
             json_file = json_files[-1]
             json_path = os.path.join(processed_dir, json_file)
