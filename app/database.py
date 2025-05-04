@@ -3,6 +3,7 @@ from mysql.connector import errorcode
 from .config import Config
 from typing import Dict, Any, List, Optional
 import json
+from app.s3_service import S3Service
 
 class Database:
     def __init__(self):
@@ -52,14 +53,15 @@ class Database:
             """, "users table created"),
             'uploaded_files': ("""
                 CREATE TABLE uploaded_files (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                original_filename VARCHAR(255) NOT NULL,
-                checksum VARCHAR(64) NOT NULL,
-                json_path TEXT NOT NULL,
-                user_id INT NOT NULL,
-                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    original_filename VARCHAR(255) NOT NULL,
+                    checksum VARCHAR(64) NOT NULL,
+                    json_path TEXT NOT NULL,
+                    user_id INT NOT NULL,
+                    s3_key VARCHAR(512),  # Add this new column
+                    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
             """, "uploaded_files table created"),
             'current_state': ("""
                 CREATE TABLE IF NOT EXISTS current_state (
@@ -195,15 +197,15 @@ class Database:
             conn.close()
 
     # File processing methods
-    def register_file_processing(self, conn, original_filename: str, checksum: str, json_path: str, user_id: int) -> None:
+    def register_file_processing(self, conn, original_filename: str, checksum: str, json_path: str, user_id: int, s3_key: str = None) -> None:
         """Register a file processing in the database (no commit)"""
         cursor = conn.cursor()
         try:
             cursor.execute('''
                 INSERT INTO uploaded_files 
-                (original_filename, checksum, json_path, user_id, processed_at)
-                VALUES (%s, %s, %s, %s, NOW())
-            ''', (original_filename, checksum, json_path, user_id))
+                (original_filename, checksum, json_path, user_id, s3_key, processed_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+            ''', (original_filename, checksum, json_path, user_id, s3_key))
         except Exception as e:
             raise
         finally:
@@ -863,6 +865,25 @@ class Database:
                 (post_id,)
             )
             return cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_file_download_url(self, file_id: int) -> Optional[str]:
+        """Get a download URL for the original file"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT s3_key FROM uploaded_files WHERE id = %s",
+                (file_id,)
+            )
+            result = cursor.fetchone()
+            if result and result[0]:
+                s3 = S3Service()
+                return s3.get_file_url(result[0])
+            return None
         finally:
             cursor.close()
             conn.close()

@@ -6,6 +6,7 @@ from typing import Dict, Any, List
 from .database import Database
 from datetime import datetime
 import subprocess
+from .s3_service import S3Service
 
 class FileService:
     PROCESSED_DIR = "processed"
@@ -31,6 +32,10 @@ class FileService:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
+        # Initialize S3 service
+        s3 = S3Service()
+        s3_key = None
+
         # Get paths
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         rust_binary = os.path.join(project_root, "eu4_parser.exe")
@@ -43,7 +48,10 @@ class FileService:
         conn = db._get_connection()  # Get a single connection for the entire process
         
         try:
-            # 1. Process file with Rust binary
+            # 1. Upload original file to S3
+            s3_key = s3.upload_file(file_path, user_id)
+
+            # 2. Process file with Rust binary
             result = subprocess.run(
                 [rust_binary, input_file, str(user_id)],
                 cwd=project_root,
@@ -52,7 +60,7 @@ class FileService:
                 text=True
             )
 
-            # 2. Find the generated JSON file
+            # 3. Find the generated JSON file
             json_files = [
                 f for f in os.listdir(processed_dir)
                 if f.endswith('.json') and f.startswith(Path(file_path).stem)
@@ -64,22 +72,23 @@ class FileService:
             json_file = json_files[-1]
             json_path = os.path.join(processed_dir, json_file)
 
-            # 3. Load the processed data
+            # 4. Load the processed data
             with open(json_path, 'r', encoding='utf-8') as f:
                 output = json.load(f)
             checksum = output['file_checksum']
 
-            # 4. Save all country data in a transaction
+            # 5. Save all country data in a transaction
             for country_data in output.get('processed_data', []):
                 db.save_all_country_data(conn, checksum, country_data)
 
-            # 5. Only register file processing AFTER all country data is saved
+            # 6. Register file processing with S3 key
             db.register_file_processing(
                 conn,
                 original_filename=os.path.basename(file_path),
                 checksum=checksum,
                 json_path=json_path,
-                user_id=user_id
+                user_id=user_id,
+                s3_key=s3_key
             )
 
             # Commit the entire transaction
@@ -90,13 +99,17 @@ class FileService:
                 'json_output': json_path,
                 'checksum': checksum,
                 'user_id': user_id,
-                'data': output
+                'data': output,
+                's3_key': s3_key
             }
 
         except Exception as e:
             # Rollback on any error
             if conn:
                 conn.rollback()
+            # Clean up S3 file if it was uploaded
+            if s3_key:
+                s3.delete_file(s3_key)
             # Clean up JSON file if it was created
             if json_path and os.path.exists(json_path):
                 os.remove(json_path)

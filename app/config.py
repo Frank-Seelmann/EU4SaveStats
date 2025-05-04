@@ -11,5 +11,10 @@ class Config:
     DB_USER = os.environ.get('DB_USER')
     DB_PASSWORD = os.environ.get('DB_PASSWORD')
     DB_NAME = os.environ.get('DB_NAME')
-    S3_BUCKET = os.environ.get('S3_BUCKET', 'eusavestats-bucket')
+    S3_ENABLED = os.getenv('S3_ENABLED', 'false').lower() == 'true'
+    S3_BUCKET = os.getenv('S3_BUCKET')
+    S3_REGION = os.getenv('S3_REGION')
+    S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY')
+    S3_SECRET_KEY = os.getenv('S3_SECRET_KEY')
+    S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL', None)  # For non-AWS S3 compatible services
     SQLALCHEMY_TRACK_MODIFICATIONS = False
